@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>POS Argentina</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       TOPBAR / HEADER
+  ═══════════════════════════════════════════════════════════════ -->
+  <header class="topbar">
+    <div class="topbar-brand">
+      <span class="brand-icon">⬡</span>
+      <span class="brand-name">POS<span class="brand-accent">AR</span></span>
+    </div>
+
+    <nav class="topbar-nav">
+      <button class="nav-btn active" data-view="pos" onclick="switchView('pos')">
+        <span class="nav-icon">⌨</span> Punto de Venta
+      </button>
+      <button class="nav-btn" data-view="inventario" onclick="switchView('inventario')">
+        <span class="nav-icon">☰</span> Inventario
+      </button>
+    </nav>
+
+    <div class="topbar-info">
+      <span id="clock" class="clock">00:00:00</span>
+      <span class="separator">|</span>
+      <span class="status-dot"></span>
+      <span class="status-text">Sistema activo</span>
+    </div>
+  </header>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       VIEW: PUNTO DE VENTA
+  ═══════════════════════════════════════════════════════════════ -->
+  <main id="view-pos" class="view active">
+    <div class="pos-layout">
+
+      <!-- Panel izquierdo: input de código + carrito -->
+      <section class="pos-left">
+        <!-- Barra de búsqueda / scanner -->
+        <div class="scan-bar">
+          <div class="scan-bar-inner">
+            <span class="scan-icon">⬡</span>
+            <input
+              type="text"
+              id="barcode-input"
+              class="barcode-input"
+              placeholder="Escanear código o escribir y presionar ENTER..."
+              autocomplete="off"
+              autofocus
+            />
+            <kbd class="key-hint">ENTER</kbd>
+          </div>
+          <div id="scan-feedback" class="scan-feedback"></div>
+        </div>
+
+        <!-- Tabla del carrito -->
+        <div class="cart-container">
+          <div class="cart-header">
+            <span class="cart-title">CARRITO</span>
+            <span id="cart-count" class="cart-count">0 ítems</span>
+            <button class="btn-clear" onclick="limpiarCarrito()" title="Vaciar carrito (Esc)">
+              ✕ Vaciar
+            </button>
+          </div>
+
+          <div class="cart-scroll">
+            <table class="cart-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Producto</th>
+                  <th>Precio Unit.</th>
+                  <th>Cant.</th>
+                  <th>Subtotal</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="cart-body">
+                <!-- Los ítems se insertan dinámicamente -->
+              </tbody>
+            </table>
+
+            <!-- Estado vacío -->
+            <div id="cart-empty" class="cart-empty">
+              <div class="cart-empty-icon">⬡</div>
+              <p>El carrito está vacío.</p>
+              <p class="cart-empty-hint">Escanea un código de barras para comenzar.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Panel derecho: resumen y acciones -->
+      <section class="pos-right">
+        <div class="totales-card">
+          <div class="totales-row subtotal-row">
+            <span>Subtotal</span>
+            <span id="display-subtotal">$0,00</span>
+          </div>
+          <div class="totales-divider"></div>
+          <div class="totales-row total-row">
+            <span>TOTAL</span>
+            <span id="display-total">$0,00</span>
+          </div>
+        </div>
+
+        <!-- Atajos de teclado -->
+        <div class="shortcuts-card">
+          <p class="shortcuts-title">Atajos</p>
+          <div class="shortcut"><kbd>ENTER</kbd><span>Agregar producto</span></div>
+          <div class="shortcut"><kbd>F2</kbd><span>Abrir cobro</span></div>
+          <div class="shortcut"><kbd>ESC</kbd><span>Vaciar carrito</span></div>
+          <div class="shortcut"><kbd>F5</kbd><span>Inventario</span></div>
+        </div>
+
+        <button class="btn-cobrar" onclick="abrirModalCobro()" id="btn-cobrar" disabled>
+          <span class="btn-cobrar-icon">$</span>
+          <span>COBRAR</span>
+          <kbd class="btn-cobrar-key">F2</kbd>
+        </button>
+      </section>
+    </div>
+  </main>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       VIEW: INVENTARIO (CRUD)
+  ═══════════════════════════════════════════════════════════════ -->
+  <main id="view-inventario" class="view">
+    <div class="inv-layout">
+
+      <div class="inv-header">
+        <h2 class="inv-title">Gestión de Inventario</h2>
+        <div class="inv-actions">
+          <div class="search-box">
+            <span class="search-icon">⌕</span>
+            <input
+              type="text"
+              id="inv-search"
+              placeholder="Buscar por nombre o código..."
+              oninput="buscarProductos()"
+            />
+          </div>
+          <button class="btn-nuevo" onclick="abrirModalProducto()">
+            + Nuevo Producto
+          </button>
+        </div>
+      </div>
+
+      <div class="inv-table-wrapper">
+        <table class="inv-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Código de Barras</th>
+              <th>Nombre</th>
+              <th>Precio</th>
+              <th>Stock</th>
+              <th>Actualizado</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="inv-body">
+            <tr><td colspan="7" class="loading-row">Cargando productos...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       MODAL: COBRO
+  ═══════════════════════════════════════════════════════════════ -->
+  <div id="modal-cobro" class="modal-overlay" onclick="cerrarModalCobro(event)">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>💳 Procesar Cobro</h3>
+        <button class="modal-close" onclick="cerrarModalCobro()">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="cobro-total-display">
+          <span class="cobro-label">Total a Cobrar</span>
+          <span id="modal-total" class="cobro-amount">$0,00</span>
+        </div>
+
+        <div class="cobro-input-group">
+          <label for="input-efectivo">Efectivo recibido ($)</label>
+          <input
+            type="number"
+            id="input-efectivo"
+            class="cobro-input"
+            placeholder="0,00"
+            min="0"
+            step="0.01"
+            oninput="calcularVuelto()"
+            onkeydown="handleCobroKey(event)"
+          />
+        </div>
+
+        <!-- Accesos rápidos de billetes argentinos -->
+        <div class="billetes-rapidos">
+          <span class="billetes-label">Rápido:</span>
+          <button class="billet-btn" onclick="setBillete(500)">$500</button>
+          <button class="billet-btn" onclick="setBillete(1000)">$1.000</button>
+          <button class="billet-btn" onclick="setBillete(2000)">$2.000</button>
+          <button class="billet-btn" onclick="setBillete(5000)">$5.000</button>
+          <button class="billet-btn" onclick="setBillete(10000)">$10.000</button>
+          <button class="billet-btn" onclick="setBillete(20000)">$20.000</button>
+        </div>
+
+        <div class="vuelto-display" id="vuelto-display">
+          <span class="vuelto-label">Vuelto</span>
+          <span id="modal-vuelto" class="vuelto-amount neutral">—</span>
+        </div>
+
+        <div id="cobro-error" class="cobro-error hidden"></div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn-cancelar" onclick="cerrarModalCobro()">Cancelar</button>
+        <button class="btn-confirmar" id="btn-confirmar" onclick="procesarVenta()" disabled>
+          <span id="btn-confirmar-text">Confirmar Venta</span>
+          <kbd>ENTER</kbd>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       MODAL: PRODUCTO (crear / editar)
+  ═══════════════════════════════════════════════════════════════ -->
+  <div id="modal-producto" class="modal-overlay" onclick="cerrarModalProducto(event)">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 id="modal-producto-title">Nuevo Producto</h3>
+        <button class="modal-close" onclick="cerrarModalProducto()">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <input type="hidden" id="prod-id" />
+        <div class="form-group">
+          <label for="prod-codigo">Código de Barras *</label>
+          <input type="text" id="prod-codigo" class="form-input" placeholder="Ej: 7790580000001" />
+        </div>
+        <div class="form-group">
+          <label for="prod-nombre">Nombre del Producto *</label>
+          <input type="text" id="prod-nombre" class="form-input" placeholder="Ej: Coca Cola 500ml" />
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="prod-precio">Precio ($) *</label>
+            <input type="number" id="prod-precio" class="form-input" placeholder="0.00" min="0" step="0.01" />
+          </div>
+          <div class="form-group">
+            <label for="prod-stock">Stock inicial</label>
+            <input type="number" id="prod-stock" class="form-input" placeholder="0" min="0" step="1" />
+          </div>
+        </div>
+        <div id="prod-error" class="cobro-error hidden"></div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn-cancelar" onclick="cerrarModalProducto()">Cancelar</button>
+        <button class="btn-confirmar" onclick="guardarProducto()">
+          <span id="prod-btn-text">Guardar Producto</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       MODAL: COMPROBANTE DE VENTA
+  ═══════════════════════════════════════════════════════════════ -->
+  <div id="modal-comprobante" class="modal-overlay" onclick="cerrarModalComprobante(event)">
+    <div class="modal-box comprobante-box">
+      <div class="modal-header">
+        <h3>✅ Venta Completada</h3>
+        <button class="modal-close" onclick="cerrarModalComprobante()">✕</button>
+      </div>
+      <div class="modal-body" id="comprobante-body">
+        <!-- Se genera dinámicamente -->
+      </div>
+      <div class="modal-footer">
+        <button class="btn-confirmar full-width" onclick="cerrarModalComprobante()">
+          Nueva Venta <kbd>ENTER</kbd>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast notifications -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <script src="js/app.js"></script>
+</body>
+</html>
