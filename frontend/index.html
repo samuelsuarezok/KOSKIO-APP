@@ -22,6 +22,9 @@
       <button class="nav-btn active" data-view="pos" onclick="switchView('pos')">
         <span class="nav-icon">⌨</span> Punto de Venta
       </button>
+      <button class="nav-btn" data-view="ventas" id="nav-ventas" onclick="switchView('ventas')">
+        <span class="nav-icon">◈</span> Ventas
+      </button>
       <button class="nav-btn" data-view="inventario" id="nav-inventario" onclick="switchView('inventario')">
         <span class="nav-icon">☰</span> Inventario
       </button>
@@ -41,14 +44,18 @@
     </div>
   </header>
 
-  <!-- VIEW: PUNTO DE VENTA -->
+  <!-- ══════════════════════════════════════════════════════
+       VIEW: PUNTO DE VENTA
+  ══════════════════════════════════════════════════════ -->
   <main id="view-pos" class="view active">
     <div class="pos-layout">
       <section class="pos-left">
         <div class="scan-bar">
           <div class="scan-bar-inner">
             <span class="scan-icon">⬡</span>
-            <input type="text" id="barcode-input" class="barcode-input" placeholder="Escanear código o escribir y presionar ENTER..." autocomplete="off" autofocus />
+            <input type="text" id="barcode-input" class="barcode-input"
+              placeholder="Escanear código o escribir y presionar ENTER..."
+              autocomplete="off" autofocus />
             <kbd class="key-hint">ENTER</kbd>
           </div>
           <div id="scan-feedback" class="scan-feedback"></div>
@@ -61,7 +68,9 @@
           </div>
           <div class="cart-scroll">
             <table class="cart-table">
-              <thead><tr><th>#</th><th>Producto</th><th>Precio Unit.</th><th>Cant.</th><th>Subtotal</th><th></th></tr></thead>
+              <thead>
+                <tr><th>#</th><th>Producto</th><th>Precio Unit.</th><th>Cant.</th><th>Subtotal</th><th></th></tr>
+              </thead>
               <tbody id="cart-body"></tbody>
             </table>
             <div id="cart-empty" class="cart-empty">
@@ -74,7 +83,7 @@
       </section>
       <section class="pos-right">
         <div class="totales-card">
-          <div class="totales-row subtotal-row"><span>Subtotal</span><span id="display-subtotal">$0,00</span></div>
+          <div class="totales-row"><span>Subtotal</span><span id="display-subtotal">$0,00</span></div>
           <div class="totales-divider"></div>
           <div class="totales-row total-row"><span>TOTAL</span><span id="display-total">$0,00</span></div>
         </div>
@@ -83,7 +92,7 @@
           <div class="shortcut"><kbd>ENTER</kbd><span>Agregar producto</span></div>
           <div class="shortcut"><kbd>F2</kbd><span>Abrir cobro</span></div>
           <div class="shortcut"><kbd>ESC</kbd><span>Vaciar carrito</span></div>
-          <div class="shortcut"><kbd>F5</kbd><span>Inventario</span></div>
+          <div class="shortcut"><kbd>F5</kbd><span>Historial ventas</span></div>
         </div>
         <button class="btn-cobrar" onclick="abrirModalCobro()" id="btn-cobrar" disabled>
           <span class="btn-cobrar-icon">$</span><span>COBRAR</span><kbd class="btn-cobrar-key">F2</kbd>
@@ -92,7 +101,74 @@
     </div>
   </main>
 
-  <!-- VIEW: INVENTARIO -->
+  <!-- ══════════════════════════════════════════════════════
+       VIEW: HISTORIAL DE VENTAS
+  ══════════════════════════════════════════════════════ -->
+  <main id="view-ventas" class="view">
+    <div class="inv-layout">
+
+      <div class="inv-header">
+        <h2 class="inv-title">Historial de Ventas</h2>
+        <div class="inv-actions ventas-filtros">
+          <div class="filtro-grupo">
+            <label class="filtro-label">Desde</label>
+            <input type="date" id="filtro-desde" class="filtro-input" onchange="cargarVentas()" />
+          </div>
+          <div class="filtro-grupo">
+            <label class="filtro-label">Hasta</label>
+            <input type="date" id="filtro-hasta" class="filtro-input" onchange="cargarVentas()" />
+          </div>
+          <button class="btn-filtro-limpiar" onclick="limpiarFiltrosVentas()">✕ Limpiar</button>
+          <button class="btn-nuevo" onclick="cargarVentas()">↻ Actualizar</button>
+        </div>
+      </div>
+
+      <!-- Tarjetas de resumen -->
+      <div class="ventas-resumen" id="ventas-resumen">
+        <div class="resumen-card">
+          <span class="resumen-label">Total Ventas</span>
+          <span class="resumen-valor" id="resumen-cantidad">—</span>
+        </div>
+        <div class="resumen-card resumen-highlight">
+          <span class="resumen-label">Monto Total</span>
+          <span class="resumen-valor" id="resumen-monto">—</span>
+        </div>
+        <div class="resumen-card">
+          <span class="resumen-label">Promedio por Venta</span>
+          <span class="resumen-valor" id="resumen-promedio">—</span>
+        </div>
+      </div>
+
+      <div class="inv-table-wrapper">
+        <table class="inv-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Fecha y Hora</th>
+              <th>Cajero</th>
+              <th>Total</th>
+              <th>Efectivo</th>
+              <th>Vuelto</th>
+              <th>CAE</th>
+              <th>Estado</th>
+              <th>Detalle</th>
+            </tr>
+          </thead>
+          <tbody id="ventas-body">
+            <tr><td colspan="9" class="loading-row">Cargando ventas...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Paginación -->
+      <div class="paginacion" id="paginacion"></div>
+
+    </div>
+  </main>
+
+  <!-- ══════════════════════════════════════════════════════
+       VIEW: INVENTARIO
+  ══════════════════════════════════════════════════════ -->
   <main id="view-inventario" class="view">
     <div class="inv-layout">
       <div class="inv-header">
@@ -107,14 +183,20 @@
       </div>
       <div class="inv-table-wrapper">
         <table class="inv-table">
-          <thead><tr><th>ID</th><th>Código de Barras</th><th>Nombre</th><th>Precio</th><th>Stock</th><th>Actualizado</th><th>Acciones</th></tr></thead>
-          <tbody id="inv-body"><tr><td colspan="7" class="loading-row">Cargando productos...</td></tr></tbody>
+          <thead>
+            <tr><th>ID</th><th>Código de Barras</th><th>Nombre</th><th>Precio</th><th>Stock</th><th>Actualizado</th><th>Acciones</th></tr>
+          </thead>
+          <tbody id="inv-body">
+            <tr><td colspan="7" class="loading-row">Cargando productos...</td></tr>
+          </tbody>
         </table>
       </div>
     </div>
   </main>
 
-  <!-- VIEW: USUARIOS -->
+  <!-- ══════════════════════════════════════════════════════
+       VIEW: USUARIOS
+  ══════════════════════════════════════════════════════ -->
   <main id="view-usuarios" class="view">
     <div class="inv-layout">
       <div class="inv-header">
@@ -125,17 +207,26 @@
       </div>
       <div class="inv-table-wrapper">
         <table class="inv-table">
-          <thead><tr><th>ID</th><th>Nombre</th><th>Usuario</th><th>Rol</th><th>Estado</th><th>Último acceso</th><th>Acciones</th></tr></thead>
-          <tbody id="usr-body"><tr><td colspan="7" class="loading-row">Cargando...</td></tr></tbody>
+          <thead>
+            <tr><th>ID</th><th>Nombre</th><th>Usuario</th><th>Rol</th><th>Estado</th><th>Último acceso</th><th>Acciones</th></tr>
+          </thead>
+          <tbody id="usr-body">
+            <tr><td colspan="7" class="loading-row">Cargando...</td></tr>
+          </tbody>
         </table>
       </div>
     </div>
   </main>
 
-  <!-- MODAL: COBRO -->
+  <!-- ══════════════════════════════════════════════════════
+       MODAL: COBRO
+  ══════════════════════════════════════════════════════ -->
   <div id="modal-cobro" class="modal-overlay" onclick="cerrarModalCobro(event)">
     <div class="modal-box">
-      <div class="modal-header"><h3>💳 Procesar Cobro</h3><button class="modal-close" onclick="cerrarModalCobro()">✕</button></div>
+      <div class="modal-header">
+        <h3>💳 Procesar Cobro</h3>
+        <button class="modal-close" onclick="cerrarModalCobro()">✕</button>
+      </div>
       <div class="modal-body">
         <div class="cobro-total-display">
           <span class="cobro-label">Total a Cobrar</span>
@@ -143,7 +234,8 @@
         </div>
         <div class="cobro-input-group">
           <label for="input-efectivo">Efectivo recibido ($)</label>
-          <input type="number" id="input-efectivo" class="cobro-input" placeholder="0,00" min="0" step="0.01" oninput="calcularVuelto()" onkeydown="handleCobroKey(event)" />
+          <input type="number" id="input-efectivo" class="cobro-input" placeholder="0,00"
+            min="0" step="0.01" oninput="calcularVuelto()" onkeydown="handleCobroKey(event)" />
         </div>
         <div class="billetes-rapidos">
           <span class="billetes-label">Rápido:</span>
@@ -169,37 +261,86 @@
     </div>
   </div>
 
-  <!-- MODAL: PRODUCTO -->
+  <!-- ══════════════════════════════════════════════════════
+       MODAL: DETALLE DE VENTA
+  ══════════════════════════════════════════════════════ -->
+  <div id="modal-detalle-venta" class="modal-overlay" onclick="cerrarModalDetalleVenta(event)">
+    <div class="modal-box modal-wide">
+      <div class="modal-header">
+        <h3 id="detalle-venta-title">Detalle de Venta</h3>
+        <button class="modal-close" onclick="cerrarModalDetalleVenta()">✕</button>
+      </div>
+      <div class="modal-body" id="detalle-venta-body">
+        <!-- Se genera dinámicamente -->
+      </div>
+      <div class="modal-footer">
+        <button class="btn-confirmar full-width" onclick="cerrarModalDetalleVenta()">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════
+       MODAL: PRODUCTO
+  ══════════════════════════════════════════════════════ -->
   <div id="modal-producto" class="modal-overlay" onclick="cerrarModalProducto(event)">
     <div class="modal-box">
-      <div class="modal-header"><h3 id="modal-producto-title">Nuevo Producto</h3><button class="modal-close" onclick="cerrarModalProducto()">✕</button></div>
+      <div class="modal-header">
+        <h3 id="modal-producto-title">Nuevo Producto</h3>
+        <button class="modal-close" onclick="cerrarModalProducto()">✕</button>
+      </div>
       <div class="modal-body">
         <input type="hidden" id="prod-id" />
-        <div class="form-group"><label for="prod-codigo">Código de Barras *</label><input type="text" id="prod-codigo" class="form-input" placeholder="Ej: 7790580000001" /></div>
-        <div class="form-group"><label for="prod-nombre">Nombre del Producto *</label><input type="text" id="prod-nombre" class="form-input" placeholder="Ej: Coca Cola 500ml" /></div>
+        <div class="form-group">
+          <label for="prod-codigo">Código de Barras *</label>
+          <input type="text" id="prod-codigo" class="form-input" placeholder="Ej: 7790580000001" />
+        </div>
+        <div class="form-group">
+          <label for="prod-nombre">Nombre del Producto *</label>
+          <input type="text" id="prod-nombre" class="form-input" placeholder="Ej: Coca Cola 500ml" />
+        </div>
         <div class="form-row">
-          <div class="form-group"><label for="prod-precio">Precio ($) *</label><input type="number" id="prod-precio" class="form-input" placeholder="0.00" min="0" step="0.01" /></div>
-          <div class="form-group"><label for="prod-stock">Stock</label><input type="number" id="prod-stock" class="form-input" placeholder="0" min="0" /></div>
+          <div class="form-group">
+            <label for="prod-precio">Precio ($) *</label>
+            <input type="number" id="prod-precio" class="form-input" placeholder="0.00" min="0" step="0.01" />
+          </div>
+          <div class="form-group">
+            <label for="prod-stock">Stock</label>
+            <input type="number" id="prod-stock" class="form-input" placeholder="0" min="0" />
+          </div>
         </div>
         <div id="prod-error" class="cobro-error hidden"></div>
       </div>
       <div class="modal-footer">
         <button class="btn-cancelar" onclick="cerrarModalProducto()">Cancelar</button>
-        <button class="btn-confirmar" onclick="guardarProducto()"><span id="prod-btn-text">Guardar Producto</span></button>
+        <button class="btn-confirmar" onclick="guardarProducto()">
+          <span id="prod-btn-text">Guardar Producto</span>
+        </button>
       </div>
     </div>
   </div>
 
-  <!-- MODAL: USUARIO -->
+  <!-- ══════════════════════════════════════════════════════
+       MODAL: USUARIO
+  ══════════════════════════════════════════════════════ -->
   <div id="modal-usuario" class="modal-overlay" onclick="cerrarModalUsuario(event)">
     <div class="modal-box">
-      <div class="modal-header"><h3 id="modal-usuario-title">Nuevo Usuario</h3><button class="modal-close" onclick="cerrarModalUsuario()">✕</button></div>
+      <div class="modal-header">
+        <h3 id="modal-usuario-title">Nuevo Usuario</h3>
+        <button class="modal-close" onclick="cerrarModalUsuario()">✕</button>
+      </div>
       <div class="modal-body">
         <input type="hidden" id="usr-id" />
-        <div class="form-group"><label for="usr-nombre">Nombre completo *</label><input type="text" id="usr-nombre" class="form-input" placeholder="Ej: Juan Pérez" /></div>
+        <div class="form-group">
+          <label for="usr-nombre">Nombre completo *</label>
+          <input type="text" id="usr-nombre" class="form-input" placeholder="Ej: Juan Pérez" />
+        </div>
         <div class="form-row">
-          <div class="form-group"><label for="usr-usuario">Nombre de usuario *</label><input type="text" id="usr-usuario" class="form-input" placeholder="Ej: juan" /></div>
-          <div class="form-group"><label for="usr-rol">Rol *</label>
+          <div class="form-group">
+            <label for="usr-usuario">Nombre de usuario *</label>
+            <input type="text" id="usr-usuario" class="form-input" placeholder="Ej: juan" />
+          </div>
+          <div class="form-group">
+            <label for="usr-rol">Rol *</label>
             <select id="usr-rol" class="form-input">
               <option value="cajero">Cajero</option>
               <option value="admin">Administrador</option>
@@ -220,18 +361,27 @@
       </div>
       <div class="modal-footer">
         <button class="btn-cancelar" onclick="cerrarModalUsuario()">Cancelar</button>
-        <button class="btn-confirmar" onclick="guardarUsuario()"><span id="usr-btn-text">Crear Usuario</span></button>
+        <button class="btn-confirmar" onclick="guardarUsuario()">
+          <span id="usr-btn-text">Crear Usuario</span>
+        </button>
       </div>
     </div>
   </div>
 
-  <!-- MODAL: COMPROBANTE -->
+  <!-- ══════════════════════════════════════════════════════
+       MODAL: COMPROBANTE DE VENTA
+  ══════════════════════════════════════════════════════ -->
   <div id="modal-comprobante" class="modal-overlay" onclick="cerrarModalComprobante(event)">
     <div class="modal-box comprobante-box">
-      <div class="modal-header"><h3>✅ Venta Completada</h3><button class="modal-close" onclick="cerrarModalComprobante()">✕</button></div>
+      <div class="modal-header">
+        <h3>✅ Venta Completada</h3>
+        <button class="modal-close" onclick="cerrarModalComprobante()">✕</button>
+      </div>
       <div class="modal-body" id="comprobante-body"></div>
       <div class="modal-footer">
-        <button class="btn-confirmar full-width" onclick="cerrarModalComprobante()">Nueva Venta <kbd>ENTER</kbd></button>
+        <button class="btn-confirmar full-width" onclick="cerrarModalComprobante()">
+          Nueva Venta <kbd>ENTER</kbd>
+        </button>
       </div>
     </div>
   </div>
