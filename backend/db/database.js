@@ -1,15 +1,14 @@
 // db/database.js
-// Módulo de base de datos usando sql.js (SQLite puro en WebAssembly)
-// No requiere compilación nativa — funciona en cualquier entorno Node.js
+// Base de datos sql.js con soporte de usuarios y autenticación
 
 const initSqlJs = require("sql.js");
 const fs = require("fs");
 const path = require("path");
+const bcrypt = require("bcryptjs");
 
 const DB_PATH = path.join(__dirname, "..", "pos_data.db");
 
 let db = null;
-let SQL = null;
 
 function persistirEnDisco() {
   try {
@@ -54,7 +53,7 @@ function lastInsertRowid() {
 }
 
 async function initDatabase() {
-  SQL = await initSqlJs();
+  const SQL = await initSqlJs();
 
   if (fs.existsSync(DB_PATH)) {
     const fileBuffer = fs.readFileSync(DB_PATH);
@@ -65,8 +64,7 @@ async function initDatabase() {
     console.log("✅ Nueva base de datos SQLite creada.");
   }
 
-  db.run("PRAGMA journal_mode = WAL");
-
+  // ─── Tablas de productos ───────────────────────────────────────────────────
   db.run(`CREATE TABLE IF NOT EXISTS productos (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     codigo_barras   TEXT    NOT NULL UNIQUE,
@@ -86,6 +84,7 @@ async function initDatabase() {
     cae       TEXT,
     cae_vto   TEXT,
     estado    TEXT DEFAULT 'completada',
+    usuario_id INTEGER,
     creado_en TEXT DEFAULT (datetime('now', 'localtime'))
   )`);
   console.log("✅ Tabla 'ventas' lista.");
@@ -100,13 +99,31 @@ async function initDatabase() {
   )`);
   console.log("✅ Tabla 'venta_items' lista.");
 
+  // ─── Tabla de usuarios ─────────────────────────────────────────────────────
+  db.run(`CREATE TABLE IF NOT EXISTS usuarios (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    nombre        TEXT    NOT NULL,
+    usuario       TEXT    NOT NULL UNIQUE,
+    password_hash TEXT    NOT NULL,
+    rol           TEXT    NOT NULL DEFAULT 'cajero' CHECK(rol IN ('admin', 'cajero')),
+    activo        INTEGER NOT NULL DEFAULT 1,
+    creado_en     TEXT    DEFAULT (datetime('now', 'localtime')),
+    ultimo_acceso TEXT
+  )`);
+  console.log("✅ Tabla 'usuarios' lista.");
+
   persistirEnDisco();
 
-  const count = get("SELECT COUNT(*) as c FROM productos");
-  if (!count || count.c === 0) seedDatabase();
+  // Seed productos si está vacío
+  const countProd = get("SELECT COUNT(*) as c FROM productos");
+  if (!countProd || countProd.c === 0) seedProductos();
+
+  // Seed usuario admin si no existe
+  const countUsers = get("SELECT COUNT(*) as c FROM usuarios");
+  if (!countUsers || countUsers.c === 0) seedUsuarioAdmin();
 }
 
-function seedDatabase() {
+function seedProductos() {
   const productos = [
     ["7790580000001", "Coca Cola 500ml", 850.00, 48],
     ["7790580000002", "Sprite 500ml", 820.00, 36],
@@ -122,7 +139,18 @@ function seedDatabase() {
       [cb, nombre, precio, stock]);
   });
   persistirEnDisco();
-  console.log("🌱 Base de datos sembrada con productos de ejemplo.");
+  console.log("🌱 Productos de ejemplo cargados.");
+}
+
+function seedUsuarioAdmin() {
+  const hash = bcrypt.hashSync("admin123", 10);
+  db.run(
+    "INSERT INTO usuarios (nombre, usuario, password_hash, rol) VALUES (?, ?, ?, ?)",
+    ["Administrador", "admin", hash, "admin"]
+  );
+  persistirEnDisco();
+  console.log("👤 Usuario admin creado — usuario: admin | contraseña: admin123");
+  console.log("   ⚠ Cambiá la contraseña después del primer login.");
 }
 
 function getDb() {
