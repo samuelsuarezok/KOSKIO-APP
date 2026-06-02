@@ -1,4 +1,4 @@
-// app.js - KOSKIO APP v1.2.0 — con historial de ventas
+// app.js — KOSKIO APP v1.2.0
 
 const API = "http://localhost:3000/api";
 
@@ -15,13 +15,13 @@ const state = {
 
 async function verificarSesion() {
   const token = localStorage.getItem("pos_token");
-  const usuarioGuardado = localStorage.getItem("pos_usuario");
-  if (!token || !usuarioGuardado) { window.location.href = "/login.html"; return false; }
+  const usr   = localStorage.getItem("pos_usuario");
+  if (!token || !usr) { window.location.href = "/login.html"; return false; }
   try {
-    const res = await fetch(`${API}/auth/me`, { headers: { "Authorization": `Bearer ${token}` } });
-    if (!res.ok) throw new Error("Token inválido");
-    state.token = token;
-    state.usuario = JSON.parse(usuarioGuardado);
+    const res = await fetch(`${API}/auth/me`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) throw new Error();
+    state.token   = token;
+    state.usuario = JSON.parse(usr);
     return true;
   } catch (_) { cerrarSesion(); return false; }
 }
@@ -32,13 +32,11 @@ function cerrarSesion() {
   window.location.href = "/login.html";
 }
 
-async function apiFetch(url, opciones = {}) {
-  const headers = {
-    "Content-Type": "application/json",
-    "Authorization": `Bearer ${state.token}`,
-    ...opciones.headers,
-  };
-  const res = await fetch(url, { ...opciones, headers });
+async function apiFetch(url, opts = {}) {
+  const res = await fetch(url, {
+    ...opts,
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${state.token}`, ...opts.headers },
+  });
   if (res.status === 401) {
     mostrarToast("Sesión expirada. Iniciá sesión nuevamente.", "error");
     setTimeout(cerrarSesion, 1500);
@@ -50,26 +48,20 @@ async function apiFetch(url, opciones = {}) {
 // ═══ INICIALIZACIÓN ═══════════════════════════════════════════════════════════
 
 document.addEventListener("DOMContentLoaded", async () => {
-  const sesionOk = await verificarSesion();
-  if (!sesionOk) return;
+  if (!(await verificarSesion())) return;
 
   document.getElementById("header-nombre").textContent = state.usuario.nombre;
-  document.getElementById("header-rol").textContent = state.usuario.rol.toUpperCase();
+  document.getElementById("header-rol").textContent    = state.usuario.rol.toUpperCase();
 
-  // Historial de ventas: visible para todos
-  // Inventario y usuarios: solo admin
-  if (state.usuario.rol === "admin") {
-    document.getElementById("nav-inventario").style.display = "flex";
-    document.getElementById("nav-usuarios").style.display = "flex";
-  } else {
-    document.getElementById("nav-inventario").style.display = "none";
-    document.getElementById("nav-usuarios").style.display = "none";
-  }
+  const esAdmin = state.usuario.rol === "admin";
+  ["nav-caja","nav-inventario","nav-usuarios"].forEach(id => {
+    document.getElementById(id).style.display = esAdmin ? "flex" : "none";
+  });
 
-  // Setear fechas de filtro por defecto (hoy)
   const hoy = new Date().toISOString().split("T")[0];
   document.getElementById("filtro-desde").value = hoy;
   document.getElementById("filtro-hasta").value = hoy;
+  document.getElementById("caja-fecha").value   = hoy;
 
   iniciarReloj();
   registrarAtajos();
@@ -85,7 +77,7 @@ function iniciarReloj() {
 // ═══ NAVEGACIÓN ═══════════════════════════════════════════════════════════════
 
 function switchView(vista) {
-  const soloAdmin = ["inventario", "usuarios"];
+  const soloAdmin = ["caja", "inventario", "usuarios"];
   if (soloAdmin.includes(vista) && state.usuario.rol !== "admin") {
     mostrarToast("No tenés permisos para esa sección.", "error"); return;
   }
@@ -97,20 +89,19 @@ function switchView(vista) {
 
   if (vista === "pos")        setTimeout(() => document.getElementById("barcode-input").focus(), 50);
   if (vista === "ventas")     cargarVentas();
+  if (vista === "caja")       cargarCaja();
   if (vista === "inventario") cargarInventario();
   if (vista === "usuarios")   cargarUsuarios();
 }
 
 function registrarAtajos() {
-  document.addEventListener("keydown", (e) => {
+  document.addEventListener("keydown", e => {
     if (e.key === "F2") { e.preventDefault(); if (state.carrito.length > 0) abrirModalCobro(); }
     if (e.key === "F5") { e.preventDefault(); switchView("ventas"); }
-    if (e.key === "Escape") {
-      const m = document.querySelector(".modal-overlay.open");
-      if (!m && state.vistaActual === "pos") limpiarCarrito();
-    }
+    if (e.key === "Escape" && !document.querySelector(".modal-overlay.open") && state.vistaActual === "pos")
+      limpiarCarrito();
   });
-  document.getElementById("barcode-input").addEventListener("keydown", (e) => {
+  document.getElementById("barcode-input").addEventListener("keydown", e => {
     if (e.key === "Enter") { e.preventDefault(); const c = e.target.value.trim(); if (c) buscarYAgregarProducto(c); }
   });
 }
@@ -118,13 +109,13 @@ function registrarAtajos() {
 // ═══ CARRITO ══════════════════════════════════════════════════════════════════
 
 async function buscarYAgregarProducto(codigo) {
-  const input = document.getElementById("barcode-input");
+  const input    = document.getElementById("barcode-input");
   const feedback = document.getElementById("scan-feedback");
   feedback.textContent = "Buscando..."; feedback.className = "scan-feedback"; input.value = "";
   try {
-    const res = await apiFetch(`${API}/productos/barcode/${encodeURIComponent(codigo)}`);
+    const res  = await apiFetch(`${API}/productos/barcode/${encodeURIComponent(codigo)}`);
     const data = await res.json();
-    if (!res.ok || !data.success) { feedback.textContent = `✕ Código "${codigo}" no encontrado.`; feedback.className = "scan-feedback error"; return; }
+    if (!res.ok || !data.success) { feedback.textContent = `✕ "${codigo}" no encontrado.`; feedback.className = "scan-feedback error"; return; }
     const p = data.data;
     if (p.stock <= 0) { feedback.textContent = `⚠ "${p.nombre}" sin stock.`; feedback.className = "scan-feedback warning"; return; }
     agregarAlCarrito(p);
@@ -137,10 +128,10 @@ async function buscarYAgregarProducto(codigo) {
   }
 }
 
-function agregarAlCarrito(producto) {
-  const idx = state.carrito.findIndex(i => i.producto_id === producto.id);
+function agregarAlCarrito(p) {
+  const idx = state.carrito.findIndex(i => i.producto_id === p.id);
   if (idx >= 0) { state.carrito[idx].cantidad++; state.carrito[idx].subtotal = state.carrito[idx].cantidad * state.carrito[idx].precio_unit; }
-  else state.carrito.push({ producto_id: producto.id, nombre: producto.nombre, precio_unit: producto.precio, cantidad: 1, subtotal: producto.precio });
+  else state.carrito.push({ producto_id: p.id, nombre: p.nombre, precio_unit: p.precio, cantidad: 1, subtotal: p.precio });
   recalcularTotal(); renderizarCarrito();
 }
 
@@ -154,16 +145,17 @@ function cambiarCantidad(id, delta) {
 }
 
 function eliminarDelCarrito(id) { state.carrito = state.carrito.filter(i => i.producto_id !== id); recalcularTotal(); renderizarCarrito(); }
-function limpiarCarrito() { state.carrito = []; state.total = 0; renderizarCarrito(); }
-function recalcularTotal() { state.total = state.carrito.reduce((acc, i) => acc + i.subtotal, 0); }
+function limpiarCarrito()       { state.carrito = []; state.total = 0; renderizarCarrito(); }
+function recalcularTotal()      { state.total = state.carrito.reduce((a, i) => a + i.subtotal, 0); }
 
 function renderizarCarrito() {
-  const tbody = document.getElementById("cart-body");
-  const empty = document.getElementById("cart-empty");
-  const totalItems = state.carrito.reduce((acc, i) => acc + i.cantidad, 0);
+  const tbody      = document.getElementById("cart-body");
+  const empty      = document.getElementById("cart-empty");
+  const btnCobrar  = document.getElementById("btn-cobrar");
+  const totalItems = state.carrito.reduce((a, i) => a + i.cantidad, 0);
   document.getElementById("cart-count").textContent = `${totalItems} ítem${totalItems !== 1 ? "s" : ""}`;
-  const btnCobrar = document.getElementById("btn-cobrar");
-  if (state.carrito.length === 0) { tbody.innerHTML = ""; empty.style.display = "flex"; btnCobrar.disabled = true; }
+
+  if (!state.carrito.length) { tbody.innerHTML = ""; empty.style.display = "flex"; btnCobrar.disabled = true; }
   else {
     empty.style.display = "none"; btnCobrar.disabled = false;
     tbody.innerHTML = state.carrito.map((item, i) => `
@@ -172,27 +164,27 @@ function renderizarCarrito() {
         <td class="td-nombre">${escapeHtml(item.nombre)}</td>
         <td class="td-precio">${formatPeso(item.precio_unit)}</td>
         <td><div class="qty-controls">
-          <button class="qty-btn" onclick="cambiarCantidad(${item.producto_id}, -1)">−</button>
+          <button class="qty-btn" onclick="cambiarCantidad(${item.producto_id},-1)">−</button>
           <span class="qty-value">${item.cantidad}</span>
-          <button class="qty-btn" onclick="cambiarCantidad(${item.producto_id}, 1)">+</button>
+          <button class="qty-btn" onclick="cambiarCantidad(${item.producto_id},1)">+</button>
         </div></td>
         <td class="td-subtotal">${formatPeso(item.subtotal)}</td>
         <td><button class="btn-remove-item" onclick="eliminarDelCarrito(${item.producto_id})">✕</button></td>
       </tr>`).join("");
   }
   document.getElementById("display-subtotal").textContent = formatPeso(state.total);
-  document.getElementById("display-total").textContent = formatPeso(state.total);
+  document.getElementById("display-total").textContent    = formatPeso(state.total);
 }
 
 // ═══ COBRO ════════════════════════════════════════════════════════════════════
 
 function abrirModalCobro() {
-  if (state.carrito.length === 0) return;
+  if (!state.carrito.length) return;
   document.getElementById("modal-total").textContent = formatPeso(state.total);
-  document.getElementById("input-efectivo").value = "";
-  document.getElementById("modal-vuelto").textContent = "—";
-  document.getElementById("modal-vuelto").className = "vuelto-amount neutral";
-  document.getElementById("btn-confirmar").disabled = true;
+  document.getElementById("input-efectivo").value    = "";
+  document.getElementById("modal-vuelto").textContent= "—";
+  document.getElementById("modal-vuelto").className  = "vuelto-amount neutral";
+  document.getElementById("btn-confirmar").disabled  = true;
   document.getElementById("cobro-error").classList.add("hidden");
   document.getElementById("modal-cobro").classList.add("open");
   setTimeout(() => document.getElementById("input-efectivo").focus(), 100);
@@ -221,9 +213,9 @@ function calcularVuelto() {
 }
 
 function setBillete(monto) {
-  const input = document.getElementById("input-efectivo");
+  const input  = document.getElementById("input-efectivo");
   const actual = parseFloat(input.value) || 0;
-  input.value = actual > 0 && actual < state.total ? actual + monto : monto;
+  input.value  = actual > 0 && actual < state.total ? actual + monto : monto;
   calcularVuelto(); input.focus();
 }
 
@@ -281,7 +273,7 @@ function cerrarModalComprobante(e) {
   document.getElementById("modal-comprobante").classList.remove("open");
   document.getElementById("barcode-input").focus();
 }
-document.addEventListener("keydown", (e) => {
+document.addEventListener("keydown", e => {
   const m = document.getElementById("modal-comprobante");
   if (e.key === "Enter" && m && m.classList.contains("open")) cerrarModalComprobante();
 });
@@ -290,25 +282,20 @@ document.addEventListener("keydown", (e) => {
 
 async function cargarVentas(pagina = 1) {
   state.ventasPagina = pagina;
-  const tbody = document.getElementById("ventas-body");
-  tbody.innerHTML = `<tr><td colspan="9" class="loading-row">Cargando ventas...</td></tr>`;
-
+  document.getElementById("ventas-body").innerHTML = `<tr><td colspan="9" class="loading-row">Cargando ventas...</td></tr>`;
   const desde = document.getElementById("filtro-desde").value;
   const hasta = document.getElementById("filtro-hasta").value;
-
   let url = `${API}/ventas?pagina=${pagina}&limite=20`;
   if (desde) url += `&desde=${desde}`;
   if (hasta) url += `&hasta=${hasta}`;
-
   try {
     const res  = await apiFetch(url);
     const data = await res.json();
     if (!res.ok || !data.success) throw new Error(data.mensaje);
-
     renderizarVentas(data.data, data.paginacion, data.resumen);
   } catch (err) {
     if (err.message !== "Sesión expirada")
-      tbody.innerHTML = `<tr><td colspan="9" class="loading-row" style="color:var(--danger)">Error al cargar ventas.</td></tr>`;
+      document.getElementById("ventas-body").innerHTML = `<tr><td colspan="9" class="loading-row" style="color:var(--danger)">Error al cargar ventas.</td></tr>`;
   }
 }
 
@@ -319,63 +306,40 @@ function limpiarFiltrosVentas() {
 }
 
 function renderizarVentas(ventas, paginacion, resumen) {
-  // Resumen
-  const cantidad  = resumen ? resumen.cantidad_ventas : 0;
-  const monto     = resumen ? resumen.monto_total || 0 : 0;
-  const promedio  = cantidad > 0 ? monto / cantidad : 0;
-  document.getElementById("resumen-cantidad").textContent  = cantidad;
-  document.getElementById("resumen-monto").textContent     = formatPeso(monto);
-  document.getElementById("resumen-promedio").textContent  = formatPeso(promedio);
+  const cant  = resumen ? resumen.cantidad_ventas : 0;
+  const monto = resumen ? resumen.monto_total || 0 : 0;
+  document.getElementById("resumen-cantidad").textContent = cant;
+  document.getElementById("resumen-monto").textContent    = formatPeso(monto);
+  document.getElementById("resumen-promedio").textContent = formatPeso(cant > 0 ? monto / cant : 0);
 
-  // Tabla
   const tbody = document.getElementById("ventas-body");
-  if (!ventas.length) {
-    tbody.innerHTML = `<tr><td colspan="9" class="loading-row">No hay ventas en el período seleccionado.</td></tr>`;
-    document.getElementById("paginacion").innerHTML = "";
-    return;
-  }
-
-  tbody.innerHTML = ventas.map(v => {
-    const estadoClass = v.estado === "completada" ? "estado-completada" : "estado-procesando";
-    const fechaHora   = v.creado_en || "—";
-    const cajero      = v.cajero_nombre || "—";
-    const caeCorto    = v.cae ? `${v.cae.slice(0,6)}...` : "—";
-    return `<tr>
+  if (!ventas.length) { tbody.innerHTML = `<tr><td colspan="9" class="loading-row">No hay ventas en el período.</td></tr>`; document.getElementById("paginacion").innerHTML = ""; return; }
+  tbody.innerHTML = ventas.map(v => `
+    <tr>
       <td class="td-id">#${v.id}</td>
-      <td class="td-fecha">${fechaHora}</td>
-      <td class="td-nombre">${escapeHtml(cajero)}</td>
+      <td class="td-fecha">${v.creado_en || "—"}</td>
+      <td class="td-nombre">${escapeHtml(v.cajero_nombre || "—")}</td>
       <td class="td-monto">${formatPeso(v.total)}</td>
       <td class="td-precio">${formatPeso(v.efectivo)}</td>
       <td class="td-vuelto">${formatPeso(v.vuelto)}</td>
-      <td class="td-cae" title="${v.cae || ''}">${caeCorto}</td>
-      <td><span class="estado-venta ${estadoClass}">${v.estado}</span></td>
+      <td class="td-cae" title="${v.cae||''}">${v.cae ? v.cae.slice(0,6)+"..." : "—"}</td>
+      <td><span class="estado-venta ${v.estado==="completada"?"estado-completada":"estado-procesando"}">${v.estado}</span></td>
       <td><button class="btn-ver-detalle" onclick="verDetalleVenta(${v.id})">Ver detalle</button></td>
-    </tr>`;
-  }).join("");
-
-  // Paginación
+    </tr>`).join("");
   renderizarPaginacion(paginacion);
 }
 
 function renderizarPaginacion(p) {
-  const container = document.getElementById("paginacion");
-  if (!p || p.paginas <= 1) { container.innerHTML = ""; return; }
-
-  let html = `<button class="pag-btn" onclick="cargarVentas(${p.pagina - 1})" ${p.pagina <= 1 ? "disabled" : ""}>← Anterior</button>`;
-
-  // Mostrar hasta 5 páginas alrededor de la actual
-  const inicio = Math.max(1, p.pagina - 2);
-  const fin    = Math.min(p.paginas, p.pagina + 2);
-
-  if (inicio > 1) html += `<button class="pag-btn" onclick="cargarVentas(1)">1</button><span class="pag-info">...</span>`;
-  for (let i = inicio; i <= fin; i++) {
-    html += `<button class="pag-btn ${i === p.pagina ? "active" : ""}" onclick="cargarVentas(${i})">${i}</button>`;
-  }
+  const c = document.getElementById("paginacion");
+  if (!p || p.paginas <= 1) { c.innerHTML = ""; return; }
+  let html = `<button class="pag-btn" onclick="cargarVentas(${p.pagina-1})" ${p.pagina<=1?"disabled":""}>← Anterior</button>`;
+  const ini = Math.max(1, p.pagina-2), fin = Math.min(p.paginas, p.pagina+2);
+  if (ini > 1) html += `<button class="pag-btn" onclick="cargarVentas(1)">1</button><span class="pag-info">...</span>`;
+  for (let i = ini; i <= fin; i++) html += `<button class="pag-btn ${i===p.pagina?"active":""}" onclick="cargarVentas(${i})">${i}</button>`;
   if (fin < p.paginas) html += `<span class="pag-info">...</span><button class="pag-btn" onclick="cargarVentas(${p.paginas})">${p.paginas}</button>`;
-
-  html += `<button class="pag-btn" onclick="cargarVentas(${p.pagina + 1})" ${p.pagina >= p.paginas ? "disabled" : ""}>Siguiente →</button>`;
+  html += `<button class="pag-btn" onclick="cargarVentas(${p.pagina+1})" ${p.pagina>=p.paginas?"disabled":""}>Siguiente →</button>`;
   html += `<span class="pag-info">${p.total} ventas en total</span>`;
-  container.innerHTML = html;
+  c.innerHTML = html;
 }
 
 async function verDetalleVenta(id) {
@@ -384,61 +348,34 @@ async function verDetalleVenta(id) {
   document.getElementById("detalle-venta-title").textContent = `Venta #${id}`;
   body.innerHTML = `<p style="text-align:center;color:var(--text-muted);padding:24px">Cargando...</p>`;
   modal.classList.add("open");
-
   try {
     const res  = await apiFetch(`${API}/ventas/${id}`);
     const data = await res.json();
     if (!res.ok || !data.success) throw new Error(data.mensaje);
-
     const v = data.data;
-    const itemsHtml = (v.items || []).map(item => `
-      <tr>
-        <td class="td-codigo">${escapeHtml(item.codigo_barras || "")}</td>
-        <td class="td-nombre">${escapeHtml(item.producto_nombre || item.nombre || "")}</td>
-        <td style="font-family:var(--font-mono);text-align:center">${item.cantidad}</td>
-        <td class="td-precio">${formatPeso(item.precio_unit)}</td>
-        <td class="td-subtotal">${formatPeso(item.subtotal)}</td>
-      </tr>`).join("");
-
     body.innerHTML = `
       <div class="detalle-meta">
-        <div class="detalle-meta-item">
-          <span class="detalle-meta-label">Fecha y hora</span>
-          <span class="detalle-meta-valor">${v.creado_en || "—"}</span>
-        </div>
-        <div class="detalle-meta-item">
-          <span class="detalle-meta-label">Cajero</span>
-          <span class="detalle-meta-valor">${escapeHtml(v.cajero_nombre || "—")}</span>
-        </div>
-        <div class="detalle-meta-item">
-          <span class="detalle-meta-label">CAE</span>
-          <span class="detalle-meta-valor">${v.cae || "—"}</span>
-        </div>
-        <div class="detalle-meta-item">
-          <span class="detalle-meta-label">Vto. CAE</span>
-          <span class="detalle-meta-valor">${formatFechaCAE(v.cae_vto) || "—"}</span>
-        </div>
-        <div class="detalle-meta-item">
-          <span class="detalle-meta-label">Efectivo</span>
-          <span class="detalle-meta-valor">${formatPeso(v.efectivo)}</span>
-        </div>
-        <div class="detalle-meta-item">
-          <span class="detalle-meta-label">Vuelto</span>
-          <span class="detalle-meta-valor">${formatPeso(v.vuelto)}</span>
-        </div>
+        <div class="detalle-meta-item"><span class="detalle-meta-label">Fecha y hora</span><span class="detalle-meta-valor">${v.creado_en||"—"}</span></div>
+        <div class="detalle-meta-item"><span class="detalle-meta-label">Cajero</span><span class="detalle-meta-valor">${escapeHtml(v.cajero_nombre||"—")}</span></div>
+        <div class="detalle-meta-item"><span class="detalle-meta-label">CAE</span><span class="detalle-meta-valor">${v.cae||"—"}</span></div>
+        <div class="detalle-meta-item"><span class="detalle-meta-label">Vto. CAE</span><span class="detalle-meta-valor">${formatFechaCAE(v.cae_vto)||"—"}</span></div>
+        <div class="detalle-meta-item"><span class="detalle-meta-label">Efectivo</span><span class="detalle-meta-valor">${formatPeso(v.efectivo)}</span></div>
+        <div class="detalle-meta-item"><span class="detalle-meta-label">Vuelto</span><span class="detalle-meta-valor">${formatPeso(v.vuelto)}</span></div>
       </div>
-
       <div class="detalle-items-title">Productos vendidos</div>
       <table class="detalle-items-table">
-        <thead>
-          <tr><th>Código</th><th>Producto</th><th style="text-align:center">Cant.</th><th>Precio Unit.</th><th>Subtotal</th></tr>
-        </thead>
-        <tbody>${itemsHtml}</tbody>
+        <thead><tr><th>Código</th><th>Producto</th><th style="text-align:center">Cant.</th><th>Precio Unit.</th><th>Subtotal</th></tr></thead>
+        <tbody>${(v.items||[]).map(item=>`
+          <tr>
+            <td class="td-codigo">${escapeHtml(item.codigo_barras||"")}</td>
+            <td class="td-nombre">${escapeHtml(item.producto_nombre||item.nombre||"")}</td>
+            <td style="font-family:var(--font-mono);text-align:center">${item.cantidad}</td>
+            <td class="td-precio">${formatPeso(item.precio_unit)}</td>
+            <td class="td-subtotal">${formatPeso(item.subtotal)}</td>
+          </tr>`).join("")}
+        </tbody>
       </table>
-      <div class="detalle-total-row">
-        <span>TOTAL</span>
-        <span>${formatPeso(v.total)}</span>
-      </div>`;
+      <div class="detalle-total-row"><span>TOTAL</span><span>${formatPeso(v.total)}</span></div>`;
   } catch (err) {
     if (err.message !== "Sesión expirada")
       body.innerHTML = `<p style="text-align:center;color:var(--danger);padding:24px">Error al cargar el detalle.</p>`;
@@ -450,6 +387,188 @@ function cerrarModalDetalleVenta(e) {
   document.getElementById("modal-detalle-venta").classList.remove("open");
 }
 
+// ═══ CIERRE DE CAJA ═══════════════════════════════════════════════════════════
+
+async function cargarCaja() {
+  const fecha = document.getElementById("caja-fecha").value || new Date().toISOString().split("T")[0];
+
+  // Reset KPIs
+  ["kpi-total","kpi-cantidad","kpi-efectivo","kpi-vuelto"].forEach(id => document.getElementById(id).textContent = "...");
+
+  try {
+    const res  = await apiFetch(`${API}/caja/resumen?fecha=${fecha}`);
+    const data = await res.json();
+    if (!res.ok || !data.success) throw new Error(data.mensaje);
+
+    const { totales, porCajero, topProductos, porHora, cierreExistente } = data.data;
+
+    // ── KPIs ──────────────────────────────────────────────────────────────────
+    const cant  = totales.cantidad_ventas || 0;
+    const monto = totales.monto_total     || 0;
+    document.getElementById("kpi-total").textContent      = formatPeso(monto);
+    document.getElementById("kpi-total-sub").textContent  = `${cant} transacciones`;
+    document.getElementById("kpi-cantidad").textContent   = cant;
+    document.getElementById("kpi-ticket-prom").textContent= `Ticket promedio: ${formatPeso(cant > 0 ? monto / cant : 0)}`;
+    document.getElementById("kpi-efectivo").textContent   = formatPeso(totales.total_efectivo || 0);
+    document.getElementById("kpi-vuelto").textContent     = formatPeso(totales.total_vuelto   || 0);
+
+    // ── Por cajero ────────────────────────────────────────────────────────────
+    const cajEl = document.getElementById("cajeros-content");
+    if (!porCajero.length) {
+      cajEl.innerHTML = `<p class="empty-state">Sin ventas en esta fecha.</p>`;
+    } else {
+      const maxMonto = Math.max(...porCajero.map(c => c.monto));
+      cajEl.innerHTML = porCajero.map(c => `
+        <div class="cajero-row">
+          <span class="cajero-nombre">${escapeHtml(c.cajero)}</span>
+          <span class="cajero-cantidad">${c.cantidad} ventas</span>
+          <div class="cajero-bar-wrap">
+            <div class="cajero-bar" style="width:${maxMonto > 0 ? (c.monto/maxMonto*100) : 0}%"></div>
+          </div>
+          <span class="cajero-monto">${formatPeso(c.monto)}</span>
+        </div>`).join("");
+    }
+
+    // ── Top productos ─────────────────────────────────────────────────────────
+    const topEl = document.getElementById("top-productos-content");
+    if (!topProductos.length) {
+      topEl.innerHTML = `<p class="empty-state">Sin ventas en esta fecha.</p>`;
+    } else {
+      topEl.innerHTML = topProductos.map((p, i) => `
+        <div class="producto-row">
+          <span class="producto-pos">${i + 1}</span>
+          <span class="producto-nombre" title="${escapeHtml(p.nombre)}">${escapeHtml(p.nombre)}</span>
+          <span class="producto-unidades">${p.unidades} u.</span>
+          <span class="producto-total">${formatPeso(p.total_vendido)}</span>
+        </div>`).join("");
+    }
+
+    // ── Gráfico por hora ──────────────────────────────────────────────────────
+    renderizarGraficoHoras(porHora);
+
+    // ── Panel cierre ──────────────────────────────────────────────────────────
+    document.getElementById("cierre-info-sub").textContent =
+      `Fecha: ${fecha} | Estado: ${cierreExistente ? "✅ cerrada" : "⏳ pendiente"}`;
+
+    const accionEl = document.getElementById("cierre-accion");
+    if (cierreExistente) {
+      accionEl.innerHTML = `
+        <div class="cierre-ya-realizado">
+          ✅ Caja cerrada a las ${cierreExistente.creado_en ? cierreExistente.creado_en.split(" ")[1] : "—"}
+        </div>`;
+      document.getElementById("cierre-notas").value    = cierreExistente.notas || "";
+      document.getElementById("cierre-notas").disabled = true;
+    } else {
+      accionEl.innerHTML = `
+        <button class="btn-cerrar-caja" onclick="cerrarCaja()" id="btn-cerrar-caja">
+          🔒 Registrar Cierre
+        </button>`;
+      document.getElementById("cierre-notas").disabled = false;
+    }
+
+    // ── Historial de cierres ──────────────────────────────────────────────────
+    cargarHistorialCierres();
+
+  } catch (err) {
+    if (err.message !== "Sesión expirada")
+      mostrarToast("Error al cargar datos de caja.", "error");
+  }
+}
+
+function renderizarGraficoHoras(porHora) {
+  const container = document.getElementById("grafico-horas-content");
+
+  // Crear mapa de todas las horas 0-23 con montos
+  const mapaHoras = {};
+  porHora.forEach(h => { mapaHoras[h.hora] = h; });
+
+  const maxMonto = porHora.length > 0 ? Math.max(...porHora.map(h => h.monto)) : 0;
+
+  if (maxMonto === 0) {
+    container.innerHTML = `<p class="empty-state" style="width:100%">Sin actividad registrada.</p>`;
+    return;
+  }
+
+  // Mostrar solo horas de 6 a 23 para no desperdiciar espacio
+  let html = "";
+  for (let h = 6; h <= 23; h++) {
+    const datos    = mapaHoras[h];
+    const monto    = datos ? datos.monto : 0;
+    const cantidad = datos ? datos.cantidad : 0;
+    const pct      = maxMonto > 0 ? Math.round((monto / maxMonto) * 100) : 0;
+    const activa   = cantidad > 0 ? "barra-activa" : "";
+
+    html += `
+      <div class="barra-hora">
+        <div class="barra-fill ${activa}" style="height:${Math.max(pct, 0)}%">
+          ${cantidad > 0 ? `<div class="barra-tooltip">${formatPeso(monto)}<br>${cantidad} venta${cantidad!==1?"s":""}</div>` : ""}
+        </div>
+        <span class="barra-label">${String(h).padStart(2,"0")}</span>
+      </div>`;
+  }
+  container.innerHTML = html;
+}
+
+async function cerrarCaja() {
+  const fecha = document.getElementById("caja-fecha").value || new Date().toISOString().split("T")[0];
+  const notas = document.getElementById("cierre-notas").value.trim();
+  const btn   = document.getElementById("btn-cerrar-caja");
+
+  const hoy = new Date().toISOString().split("T")[0];
+  if (fecha !== hoy) {
+    if (!confirm(`¿Estás seguro de registrar el cierre para la fecha ${fecha}? No es el día de hoy.`)) return;
+  } else {
+    if (!confirm(`¿Confirmar el cierre de caja del día de hoy (${fecha})?`)) return;
+  }
+
+  btn.disabled = true; btn.textContent = "Registrando...";
+
+  try {
+    const res  = await apiFetch(`${API}/caja/cerrar?fecha=${fecha}`, {
+      method: "POST",
+      body: JSON.stringify({ notas }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) throw new Error(data.mensaje);
+
+    mostrarToast(`Cierre de caja del ${fecha} registrado. Total: ${formatPeso(data.data.monto_total)}`, "success");
+    cargarCaja(); // recargar para mostrar el estado actualizado
+
+  } catch (err) {
+    if (err.message !== "Sesión expirada") mostrarToast(`Error: ${err.message}`, "error");
+    btn.disabled = false; btn.textContent = "🔒 Registrar Cierre";
+  }
+}
+
+async function cargarHistorialCierres() {
+  const tbody = document.getElementById("historial-cierres-body");
+  try {
+    const res  = await apiFetch(`${API}/caja/historial?limite=15`);
+    const data = await res.json();
+    if (!res.ok || !data.success) throw new Error(data.mensaje);
+
+    if (!data.data.length) {
+      tbody.innerHTML = `<tr><td colspan="8" class="empty-state">No hay cierres registrados aún.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = data.data.map(c => `
+      <tr>
+        <td class="historial-fecha">${c.fecha}</td>
+        <td style="font-family:var(--font-mono);text-align:center">${c.cantidad_ventas}</td>
+        <td class="historial-monto">${formatPeso(c.monto_total)}</td>
+        <td style="font-family:var(--font-mono)">${formatPeso(c.total_efectivo)}</td>
+        <td style="font-family:var(--font-mono);color:var(--text-muted)">${formatPeso(c.total_vuelto)}</td>
+        <td>${escapeHtml(c.admin_nombre || "—")}</td>
+        <td class="td-fecha">${c.creado_en ? c.creado_en.split(" ")[1] || c.creado_en : "—"}</td>
+        <td style="color:var(--text-muted);font-size:0.8rem">${escapeHtml(c.notas || "—")}</td>
+      </tr>`).join("");
+  } catch (err) {
+    if (err.message !== "Sesión expirada")
+      tbody.innerHTML = `<tr><td colspan="8" class="empty-state" style="color:var(--danger)">Error al cargar historial.</td></tr>`;
+  }
+}
+
 // ═══ INVENTARIO ═══════════════════════════════════════════════════════════════
 
 let todosLosProductos = [];
@@ -458,14 +577,9 @@ async function cargarInventario() {
   const tbody = document.getElementById("inv-body");
   tbody.innerHTML = `<tr><td colspan="7" class="loading-row">Cargando...</td></tr>`;
   try {
-    const res = await apiFetch(`${API}/productos`);
-    const data = await res.json();
-    todosLosProductos = data.data || [];
-    renderizarInventario(todosLosProductos);
-  } catch (err) {
-    if (err.message !== "Sesión expirada")
-      tbody.innerHTML = `<tr><td colspan="7" class="loading-row" style="color:var(--danger)">Error al cargar productos.</td></tr>`;
-  }
+    const res = await apiFetch(`${API}/productos`); const data = await res.json();
+    todosLosProductos = data.data || []; renderizarInventario(todosLosProductos);
+  } catch (err) { if (err.message !== "Sesión expirada") tbody.innerHTML = `<tr><td colspan="7" class="loading-row" style="color:var(--danger)">Error.</td></tr>`; }
 }
 
 function buscarProductos() {
@@ -479,17 +593,14 @@ function renderizarInventario(productos) {
   tbody.innerHTML = productos.map(p => {
     const sc = p.stock === 0 ? "stock-cero" : p.stock <= 5 ? "stock-bajo" : "stock-ok";
     return `<tr>
-      <td class="td-id">${p.id}</td>
-      <td class="td-codigo">${escapeHtml(p.codigo_barras)}</td>
-      <td class="td-nombre">${escapeHtml(p.nombre)}</td>
-      <td class="td-precio">${formatPeso(p.precio)}</td>
+      <td class="td-id">${p.id}</td><td class="td-codigo">${escapeHtml(p.codigo_barras)}</td>
+      <td class="td-nombre">${escapeHtml(p.nombre)}</td><td class="td-precio">${formatPeso(p.precio)}</td>
       <td class="td-stock ${sc}">${p.stock}</td>
-      <td class="td-fecha">${p.actualizado_en ? p.actualizado_en.split(" ")[0] : "—"}</td>
+      <td class="td-fecha">${p.actualizado_en?p.actualizado_en.split(" ")[0]:"—"}</td>
       <td><div class="action-btns">
         <button class="btn-edit" onclick="abrirModalProducto(${p.id})">Editar</button>
-        <button class="btn-delete" onclick="eliminarProducto(${p.id}, '${escapeHtml(p.nombre)}')">✕</button>
-      </div></td>
-    </tr>`;
+        <button class="btn-delete" onclick="eliminarProducto(${p.id},'${escapeHtml(p.nombre)}')">✕</button>
+      </div></td></tr>`;
   }).join("");
 }
 
@@ -498,22 +609,15 @@ function abrirModalProducto(id = null) {
   document.getElementById("prod-btn-text").textContent = id ? "Guardar Cambios" : "Guardar Producto";
   document.getElementById("prod-error").classList.add("hidden");
   ["prod-id","prod-codigo","prod-nombre","prod-precio","prod-stock"].forEach(i => document.getElementById(i).value = "");
-  if (id) {
-    const p = todosLosProductos.find(p => p.id === id); if (!p) return;
-    document.getElementById("prod-id").value = p.id;
-    document.getElementById("prod-codigo").value = p.codigo_barras;
-    document.getElementById("prod-nombre").value = p.nombre;
-    document.getElementById("prod-precio").value = p.precio;
-    document.getElementById("prod-stock").value = p.stock;
-  }
+  if (id) { const p = todosLosProductos.find(p => p.id === id); if (!p) return;
+    document.getElementById("prod-id").value = p.id; document.getElementById("prod-codigo").value = p.codigo_barras;
+    document.getElementById("prod-nombre").value = p.nombre; document.getElementById("prod-precio").value = p.precio;
+    document.getElementById("prod-stock").value = p.stock; }
   document.getElementById("modal-producto").classList.add("open");
   setTimeout(() => document.getElementById("prod-codigo").focus(), 100);
 }
 
-function cerrarModalProducto(e) {
-  if (e && e.target !== document.getElementById("modal-producto")) return;
-  document.getElementById("modal-producto").classList.remove("open");
-}
+function cerrarModalProducto(e) { if (e && e.target !== document.getElementById("modal-producto")) return; document.getElementById("modal-producto").classList.remove("open"); }
 
 async function guardarProducto() {
   const id = document.getElementById("prod-id").value;
@@ -522,33 +626,22 @@ async function guardarProducto() {
   const precio = parseFloat(document.getElementById("prod-precio").value);
   const stock  = parseInt(document.getElementById("prod-stock").value) || 0;
   const errorEl = document.getElementById("prod-error");
-  if (!codigo_barras || !nombre || isNaN(precio)) {
-    errorEl.textContent = "Completá los campos obligatorios."; errorEl.classList.remove("hidden"); return;
-  }
+  if (!codigo_barras || !nombre || isNaN(precio)) { errorEl.textContent = "Completá los campos obligatorios."; errorEl.classList.remove("hidden"); return; }
   try {
-    const res = await apiFetch(id ? `${API}/productos/${id}` : `${API}/productos`, {
-      method: id ? "PUT" : "POST",
-      body: JSON.stringify({ codigo_barras, nombre, precio, stock }),
-    });
+    const res = await apiFetch(id ? `${API}/productos/${id}` : `${API}/productos`, { method: id?"PUT":"POST", body: JSON.stringify({codigo_barras,nombre,precio,stock}) });
     const data = await res.json();
-    if (!res.ok || !data.success) { errorEl.textContent = data.mensaje || "Error al guardar."; errorEl.classList.remove("hidden"); return; }
-    cerrarModalProducto();
-    mostrarToast(id ? "Producto actualizado." : "Producto creado.", "success");
-    cargarInventario();
-  } catch (err) {
-    if (err.message !== "Sesión expirada") { errorEl.textContent = "Error de conexión."; errorEl.classList.remove("hidden"); }
-  }
+    if (!res.ok||!data.success) { errorEl.textContent=data.mensaje||"Error."; errorEl.classList.remove("hidden"); return; }
+    cerrarModalProducto(); mostrarToast(id?"Producto actualizado.":"Producto creado.","success"); cargarInventario();
+  } catch (err) { if (err.message!=="Sesión expirada") { errorEl.textContent="Error de conexión."; errorEl.classList.remove("hidden"); } }
 }
 
 async function eliminarProducto(id, nombre) {
   if (!confirm(`¿Eliminar "${nombre}"?`)) return;
   try {
-    const res = await apiFetch(`${API}/productos/${id}`, { method: "DELETE" });
-    const data = await res.json();
-    if (!res.ok || !data.success) throw new Error(data.mensaje);
-    mostrarToast(`"${nombre}" eliminado.`, "success");
-    cargarInventario();
-  } catch (err) { if (err.message !== "Sesión expirada") mostrarToast(`Error: ${err.message}`, "error"); }
+    const res = await apiFetch(`${API}/productos/${id}`,{method:"DELETE"}); const data=await res.json();
+    if (!res.ok||!data.success) throw new Error(data.mensaje);
+    mostrarToast(`"${nombre}" eliminado.`,"success"); cargarInventario();
+  } catch (err) { if (err.message!=="Sesión expirada") mostrarToast(`Error: ${err.message}`,"error"); }
 }
 
 // ═══ USUARIOS ═════════════════════════════════════════════════════════════════
@@ -556,114 +649,80 @@ async function eliminarProducto(id, nombre) {
 let todosLosUsuarios = [];
 
 async function cargarUsuarios() {
-  const tbody = document.getElementById("usr-body");
-  if (!tbody) return;
+  const tbody = document.getElementById("usr-body"); if (!tbody) return;
   tbody.innerHTML = `<tr><td colspan="7" class="loading-row">Cargando...</td></tr>`;
-  try {
-    const res = await apiFetch(`${API}/auth/usuarios`);
-    const data = await res.json();
-    todosLosUsuarios = data.data || [];
-    renderizarUsuarios(todosLosUsuarios);
-  } catch (err) {
-    if (err.message !== "Sesión expirada")
-      tbody.innerHTML = `<tr><td colspan="7" class="loading-row" style="color:var(--danger)">Error al cargar usuarios.</td></tr>`;
-  }
+  try { const res=await apiFetch(`${API}/auth/usuarios`); const data=await res.json(); todosLosUsuarios=data.data||[]; renderizarUsuarios(todosLosUsuarios); }
+  catch (err) { if (err.message!=="Sesión expirada") tbody.innerHTML=`<tr><td colspan="7" class="loading-row" style="color:var(--danger)">Error.</td></tr>`; }
 }
 
 function renderizarUsuarios(usuarios) {
-  const tbody = document.getElementById("usr-body");
-  if (!tbody || !usuarios.length) { if (tbody) tbody.innerHTML = `<tr><td colspan="7" class="loading-row">No hay usuarios.</td></tr>`; return; }
-  tbody.innerHTML = usuarios.map(u => `<tr>
-    <td class="td-id">${u.id}</td>
-    <td class="td-nombre">${escapeHtml(u.nombre)}</td>
+  const tbody = document.getElementById("usr-body"); if (!tbody) return;
+  if (!usuarios.length) { tbody.innerHTML=`<tr><td colspan="7" class="loading-row">No hay usuarios.</td></tr>`; return; }
+  tbody.innerHTML = usuarios.map(u=>`<tr>
+    <td class="td-id">${u.id}</td><td class="td-nombre">${escapeHtml(u.nombre)}</td>
     <td class="td-codigo">${escapeHtml(u.usuario)}</td>
     <td><span class="rol-badge rol-${u.rol}">${u.rol.toUpperCase()}</span></td>
-    <td><span class="estado-badge ${u.activo ? 'activo' : 'inactivo'}">${u.activo ? 'Activo' : 'Inactivo'}</span></td>
-    <td class="td-fecha">${u.ultimo_acceso ? u.ultimo_acceso.split(" ")[0] : "—"}</td>
+    <td><span class="estado-badge ${u.activo?"activo":"inactivo"}">${u.activo?"Activo":"Inactivo"}</span></td>
+    <td class="td-fecha">${u.ultimo_acceso?u.ultimo_acceso.split(" ")[0]:"—"}</td>
     <td><div class="action-btns">
       <button class="btn-edit" onclick="abrirModalUsuario(${u.id})">Editar</button>
-      ${u.id !== state.usuario.id ? `<button class="btn-delete" onclick="eliminarUsuario(${u.id}, '${escapeHtml(u.nombre)}')">✕</button>` : `<span style="color:var(--text-muted);font-size:0.75rem;padding:0 8px">Tú</span>`}
-    </div></td>
-  </tr>`).join("");
+      ${u.id!==state.usuario.id?`<button class="btn-delete" onclick="eliminarUsuario(${u.id},'${escapeHtml(u.nombre)}')">✕</button>`:`<span style="color:var(--text-muted);font-size:0.75rem;padding:0 8px">Tú</span>`}
+    </div></td></tr>`).join("");
 }
 
-function abrirModalUsuario(id = null) {
-  document.getElementById("modal-usuario-title").textContent = id ? "Editar Usuario" : "Nuevo Usuario";
-  document.getElementById("usr-btn-text").textContent = id ? "Guardar Cambios" : "Crear Usuario";
+function abrirModalUsuario(id=null) {
+  document.getElementById("modal-usuario-title").textContent=id?"Editar Usuario":"Nuevo Usuario";
+  document.getElementById("usr-btn-text").textContent=id?"Guardar Cambios":"Crear Usuario";
   document.getElementById("usr-error").classList.add("hidden");
-  ["usr-id","usr-nombre","usr-usuario","usr-password"].forEach(i => document.getElementById(i).value = "");
-  document.getElementById("usr-rol").value = "cajero";
-  document.getElementById("usr-activo").checked = true;
-  document.getElementById("usr-password-label").textContent = id ? "Nueva contraseña (vacío = no cambiar)" : "Contraseña *";
-  if (id) {
-    const u = todosLosUsuarios.find(u => u.id === id); if (!u) return;
-    document.getElementById("usr-id").value = u.id;
-    document.getElementById("usr-nombre").value = u.nombre;
-    document.getElementById("usr-usuario").value = u.usuario;
-    document.getElementById("usr-rol").value = u.rol;
-    document.getElementById("usr-activo").checked = u.activo === 1;
-  }
+  ["usr-id","usr-nombre","usr-usuario","usr-password"].forEach(i=>document.getElementById(i).value="");
+  document.getElementById("usr-rol").value="cajero"; document.getElementById("usr-activo").checked=true;
+  document.getElementById("usr-password-label").textContent=id?"Nueva contraseña (vacío = no cambiar)":"Contraseña *";
+  if (id) { const u=todosLosUsuarios.find(u=>u.id===id); if (!u) return;
+    document.getElementById("usr-id").value=u.id; document.getElementById("usr-nombre").value=u.nombre;
+    document.getElementById("usr-usuario").value=u.usuario; document.getElementById("usr-rol").value=u.rol;
+    document.getElementById("usr-activo").checked=u.activo===1; }
   document.getElementById("modal-usuario").classList.add("open");
-  setTimeout(() => document.getElementById("usr-nombre").focus(), 100);
+  setTimeout(()=>document.getElementById("usr-nombre").focus(),100);
 }
 
-function cerrarModalUsuario(e) {
-  if (e && e.target !== document.getElementById("modal-usuario")) return;
-  document.getElementById("modal-usuario").classList.remove("open");
-}
+function cerrarModalUsuario(e) { if (e&&e.target!==document.getElementById("modal-usuario")) return; document.getElementById("modal-usuario").classList.remove("open"); }
 
 async function guardarUsuario() {
-  const id       = document.getElementById("usr-id").value;
-  const nombre   = document.getElementById("usr-nombre").value.trim();
-  const usuario  = document.getElementById("usr-usuario").value.trim();
-  const password = document.getElementById("usr-password").value;
-  const rol      = document.getElementById("usr-rol").value;
-  const activo   = document.getElementById("usr-activo").checked;
-  const errorEl  = document.getElementById("usr-error");
-  if (!nombre || !usuario) { errorEl.textContent = "Nombre y usuario son requeridos."; errorEl.classList.remove("hidden"); return; }
-  if (!id && !password) { errorEl.textContent = "La contraseña es requerida para nuevos usuarios."; errorEl.classList.remove("hidden"); return; }
-  const payload = { nombre, usuario, rol, activo };
-  if (password) payload.password = password;
+  const id=document.getElementById("usr-id").value, nombre=document.getElementById("usr-nombre").value.trim();
+  const usuario=document.getElementById("usr-usuario").value.trim(), password=document.getElementById("usr-password").value;
+  const rol=document.getElementById("usr-rol").value, activo=document.getElementById("usr-activo").checked;
+  const errorEl=document.getElementById("usr-error");
+  if (!nombre||!usuario) { errorEl.textContent="Nombre y usuario son requeridos."; errorEl.classList.remove("hidden"); return; }
+  if (!id&&!password) { errorEl.textContent="La contraseña es requerida."; errorEl.classList.remove("hidden"); return; }
+  const payload={nombre,usuario,rol,activo}; if (password) payload.password=password;
   try {
-    const res = await apiFetch(id ? `${API}/auth/usuarios/${id}` : `${API}/auth/usuarios`, {
-      method: id ? "PUT" : "POST", body: JSON.stringify(payload),
-    });
-    const data = await res.json();
-    if (!res.ok || !data.success) { errorEl.textContent = data.mensaje || "Error al guardar."; errorEl.classList.remove("hidden"); return; }
-    cerrarModalUsuario();
-    mostrarToast(id ? "Usuario actualizado." : "Usuario creado.", "success");
-    cargarUsuarios();
-  } catch (err) { if (err.message !== "Sesión expirada") { errorEl.textContent = "Error de conexión."; errorEl.classList.remove("hidden"); } }
+    const res=await apiFetch(id?`${API}/auth/usuarios/${id}`:`${API}/auth/usuarios`,{method:id?"PUT":"POST",body:JSON.stringify(payload)});
+    const data=await res.json();
+    if (!res.ok||!data.success) { errorEl.textContent=data.mensaje||"Error."; errorEl.classList.remove("hidden"); return; }
+    cerrarModalUsuario(); mostrarToast(id?"Usuario actualizado.":"Usuario creado.","success"); cargarUsuarios();
+  } catch (err) { if (err.message!=="Sesión expirada") { errorEl.textContent="Error de conexión."; errorEl.classList.remove("hidden"); } }
 }
 
-async function eliminarUsuario(id, nombre) {
+async function eliminarUsuario(id,nombre) {
   if (!confirm(`¿Eliminar al usuario "${nombre}"?`)) return;
   try {
-    const res = await apiFetch(`${API}/auth/usuarios/${id}`, { method: "DELETE" });
-    const data = await res.json();
-    if (!res.ok || !data.success) throw new Error(data.mensaje);
-    mostrarToast(`Usuario "${nombre}" eliminado.`, "success");
-    cargarUsuarios();
-  } catch (err) { if (err.message !== "Sesión expirada") mostrarToast(`Error: ${err.message}`, "error"); }
+    const res=await apiFetch(`${API}/auth/usuarios/${id}`,{method:"DELETE"}); const data=await res.json();
+    if (!res.ok||!data.success) throw new Error(data.mensaje);
+    mostrarToast(`Usuario "${nombre}" eliminado.`,"success"); cargarUsuarios();
+  } catch (err) { if (err.message!=="Sesión expirada") mostrarToast(`Error: ${err.message}`,"error"); }
 }
 
 // ═══ UTILIDADES ═══════════════════════════════════════════════════════════════
 
-function formatPeso(v) {
-  return new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", minimumFractionDigits: 2 }).format(v || 0);
-}
-function formatFechaCAE(s) {
-  if (!s || s.length !== 8) return s || "—";
-  return `${s.slice(6,8)}/${s.slice(4,6)}/${s.slice(0,4)}`;
-}
-function escapeHtml(s) {
-  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
-}
-function mostrarToast(mensaje, tipo = "success") {
+function formatPeso(v) { return new Intl.NumberFormat("es-AR",{style:"currency",currency:"ARS",minimumFractionDigits:2}).format(v||0); }
+function formatFechaCAE(s) { if (!s||s.length!==8) return s||"—"; return `${s.slice(6,8)}/${s.slice(4,6)}/${s.slice(0,4)}`; }
+function escapeHtml(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+
+function mostrarToast(mensaje, tipo="success") {
   const container = document.getElementById("toast-container");
   const toast = document.createElement("div");
   toast.className = `toast ${tipo}`;
   toast.innerHTML = `<span>${{success:"✓",error:"✕",warning:"⚠"}[tipo]||"•"}</span> ${escapeHtml(mensaje)}`;
   container.appendChild(toast);
-  setTimeout(() => { toast.style.animation = "toastOut 0.25s ease forwards"; setTimeout(() => toast.remove(), 250); }, 3500);
+  setTimeout(()=>{ toast.style.animation="toastOut 0.25s ease forwards"; setTimeout(()=>toast.remove(),250); },3500);
 }
