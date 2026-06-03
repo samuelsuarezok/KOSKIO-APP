@@ -785,3 +785,199 @@ select.form-input option { background: var(--bg-elevated); }
   color: var(--text-muted);
   font-size: 0.85rem;
 }
+
+/* ─── BOTONES DE TICKET ──────────────────────────────────────────────────────── */
+.comprobante-print-btns {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+.btn-ticket {
+  flex: 1;
+  padding: 10px 14px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition);
+  text-align: center;
+}
+.btn-ticket:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-glow);
+}
+.btn-ticket-auto {
+  background: var(--amber-glow);
+  border-color: rgba(255,179,0,0.3);
+  color: var(--amber);
+}
+.btn-ticket-auto:hover {
+  border-color: var(--amber);
+  background: var(--amber-glow);
+  color: var(--amber);
+}
+
+/* ─── PANEL DE BACKUP ────────────────────────────────────────────────────────── */
+.backup-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  flex-shrink: 0;
+  gap: 16px;
+}
+.backup-panel-title {
+  font-weight: 700;
+  font-size: 0.92rem;
+  margin-bottom: 4px;
+}
+.backup-panel-sub {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+.btn-backup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.btn-backup:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-glow);
+  box-shadow: 0 4px 14px var(--accent-glow);
+}
+.btn-backup:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn-backup.backup-ok {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-glow);
+}
+.backup-nombre {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+.backup-tamano {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+.backup-fecha {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+.backup-reciente {
+  color: var(--accent) !important;
+}
+
+/* ─── PASO DE FACTURACIÓN ────────────────────────────────────────────────────── */
+
+.factura-pregunta {
+  text-align: center;
+  padding: 10px 0 20px;
+}
+.factura-pregunta-icon {
+  font-size: 2.4rem;
+  margin-bottom: 10px;
+}
+.factura-pregunta-titulo {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+.factura-pregunta-sub {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.factura-opciones {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.factura-opcion {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 18px 12px;
+  background: var(--bg-elevated);
+  border: 2px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+}
+.factura-opcion:hover {
+  transform: translateY(-2px);
+}
+.factura-si:hover {
+  border-color: var(--accent);
+  background: var(--accent-glow);
+  box-shadow: 0 6px 20px var(--accent-glow);
+}
+.factura-no:hover {
+  border-color: var(--amber);
+  background: var(--amber-glow);
+  box-shadow: 0 6px 20px var(--amber-glow);
+}
+.factura-opcion-icon {
+  font-size: 1.8rem;
+}
+.factura-opcion-titulo {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.factura-opcion-sub {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+/* Badge de facturada en la tabla de ventas */
+.badge-facturada {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-size: 0.68rem;
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+.badge-con-factura {
+  background: rgba(0,230,118,0.1);
+  color: var(--accent);
+  border: 1px solid rgba(0,230,118,0.3);
+}
+.badge-sin-factura {
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  border: 1px solid var(--border-light);
+}

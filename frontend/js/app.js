@@ -1,6 +1,14 @@
-// app.js — KOSKIO APP v1.2.0
+// app.js — KOSKIO APP v1.3.0 — con impresión de ticket
 
 const API = "http://localhost:3000/api";
+
+// Configuración del negocio (el admin puede cambiar esto)
+const CONFIG_NEGOCIO = {
+  nombre:      localStorage.getItem("cfg_negocio")   || "KOSKIO APP",
+  direccion:   localStorage.getItem("cfg_direccion")  || "— Kiosco / Almacén —",
+  cuit:        localStorage.getItem("cfg_cuit")       || "",
+  footer_extra:localStorage.getItem("cfg_footer")     || "",
+};
 
 const state = {
   carrito: [],
@@ -89,7 +97,7 @@ function switchView(vista) {
 
   if (vista === "pos")        setTimeout(() => document.getElementById("barcode-input").focus(), 50);
   if (vista === "ventas")     cargarVentas();
-  if (vista === "caja")       cargarCaja();
+  if (vista === "caja")       { cargarCaja(); cargarBackups(); }
   if (vista === "inventario") cargarInventario();
   if (vista === "usuarios")   cargarUsuarios();
 }
@@ -186,13 +194,28 @@ function abrirModalCobro() {
   document.getElementById("modal-vuelto").className  = "vuelto-amount neutral";
   document.getElementById("btn-confirmar").disabled  = true;
   document.getElementById("cobro-error").classList.add("hidden");
+  // Volver siempre al paso 1
+  document.getElementById("cobro-paso-1").classList.remove("hidden");
+  document.getElementById("cobro-paso-2").classList.add("hidden");
+  document.getElementById("btn-confirmar-text").textContent = "Continuar";
+  document.getElementById("btn-confirmar").onclick = irAPasoFactura;
   document.getElementById("modal-cobro").classList.add("open");
   setTimeout(() => document.getElementById("input-efectivo").focus(), 100);
+}
+
+function irAPasoFactura() {
+  // Pasar al paso 2: elegir si facturar
+  document.getElementById("cobro-paso-1").classList.add("hidden");
+  document.getElementById("cobro-paso-2").classList.remove("hidden");
+  // Ocultar el footer con el botón Continuar
+  document.getElementById("cobro-footer").style.display = "none";
 }
 
 function cerrarModalCobro(e) {
   if (e && e.target !== document.getElementById("modal-cobro")) return;
   document.getElementById("modal-cobro").classList.remove("open");
+  // Restaurar footer por si se cerró en paso 2
+  document.getElementById("cobro-footer").style.display = "";
   document.getElementById("barcode-input").focus();
 }
 
@@ -220,51 +243,141 @@ function setBillete(monto) {
 }
 
 function handleCobroKey(e) {
-  if (e.key === "Enter") { e.preventDefault(); if (!document.getElementById("btn-confirmar").disabled) procesarVenta(); }
+  if (e.key === "Enter") {
+    e.preventDefault();
+    if (!document.getElementById("btn-confirmar").disabled) irAPasoFactura();
+  }
 }
 
-async function procesarVenta() {
+async function procesarVenta(generar_factura) {
   const efectivo = parseFloat(document.getElementById("input-efectivo").value) || 0;
   const vuelto   = efectivo - state.total;
-  const btn      = document.getElementById("btn-confirmar");
-  const btnText  = document.getElementById("btn-confirmar-text");
-  btn.disabled = true; btnText.innerHTML = `<span class="spinner"></span> Procesando...`;
+
+  // Deshabilitar ambos botones del paso 2 mientras procesa
+  document.querySelectorAll(".factura-opcion").forEach(b => {
+    b.disabled = true;
+    b.style.opacity = "0.5";
+    b.style.cursor  = "not-allowed";
+  });
+
+  // Mostrar spinner en el botón elegido
+  const btnElegido = generar_factura
+    ? document.querySelector(".factura-si")
+    : document.querySelector(".factura-no");
+  const textoOriginal = btnElegido.querySelector(".factura-opcion-titulo").textContent;
+  btnElegido.querySelector(".factura-opcion-titulo").innerHTML = `<span class="spinner"></span> Procesando...`;
+
   try {
     const res = await apiFetch(`${API}/ventas`, {
       method: "POST",
       body: JSON.stringify({
         items: state.carrito.map(i => ({ producto_id: i.producto_id, cantidad: i.cantidad, precio_unit: i.precio_unit, subtotal: i.subtotal })),
         total: state.total, efectivo, vuelto,
+        generar_factura,
       }),
     });
     const data = await res.json();
     if (!res.ok || !data.success) throw new Error(data.mensaje || "Error desconocido.");
+
+    const itemsVendidos = [...state.carrito];
+
+    // Restaurar footer y cerrar modal
+    document.getElementById("cobro-footer").style.display = "";
     document.getElementById("modal-cobro").classList.remove("open");
-    mostrarComprobante(data.data, efectivo, vuelto);
+    mostrarComprobante(data.data, efectivo, vuelto, itemsVendidos);
     limpiarCarrito();
+
   } catch (err) {
+    // Restaurar botones si hay error
+    document.querySelectorAll(".factura-opcion").forEach(b => {
+      b.disabled = false; b.style.opacity = ""; b.style.cursor = "";
+    });
+    btnElegido.querySelector(".factura-opcion-titulo").textContent = textoOriginal;
+
     if (err.message !== "Sesión expirada") {
+      // Volver al paso 1 para mostrar el error
+      document.getElementById("cobro-paso-2").classList.add("hidden");
+      document.getElementById("cobro-paso-1").classList.remove("hidden");
+      document.getElementById("cobro-footer").style.display = "";
       const el = document.getElementById("cobro-error");
       el.textContent = `Error: ${err.message}`; el.classList.remove("hidden");
     }
-    btn.disabled = false; btnText.textContent = "Confirmar Venta";
   }
 }
 
-function mostrarComprobante(venta, efectivo, vuelto) {
+// ═══ IMPRESIÓN DE TICKET ══════════════════════════════════════════════════════
+
+/**
+ * Construye la URL para ticket.html con todos los datos como query params.
+ */
+function buildTicketURL(venta, efectivo, vuelto, items, autoprint = false) {
+  const p = new URLSearchParams();
+  p.set("negocio",     CONFIG_NEGOCIO.nombre);
+  p.set("direccion",   CONFIG_NEGOCIO.direccion);
+  p.set("cuit",        CONFIG_NEGOCIO.cuit);
+  p.set("footer_extra",CONFIG_NEGOCIO.footer_extra);
+  p.set("venta_id",    venta.venta_id);
+  p.set("pto_venta",   String(venta.punto_venta || 1).padStart(4, "0"));
+  p.set("comprobante", String(venta.nro_comprobante || 0).padStart(8, "0"));
+  p.set("fecha",       new Date().toLocaleString("es-AR"));
+  p.set("cajero",      state.usuario.nombre);
+  p.set("total",       venta.total);
+  p.set("efectivo",    efectivo);
+  p.set("vuelto",      vuelto);
+  p.set("cae",         venta.cae || "");
+  p.set("cae_vto",     venta.cae_vto || "");
+  p.set("items",       encodeURIComponent(JSON.stringify(items.map(i => ({
+    nombre:     i.nombre,
+    cantidad:   i.cantidad,
+    precio_unit:i.precio_unit,
+    subtotal:   i.subtotal,
+  })))));
+  if (autoprint) p.set("autoprint", "1");
+  return `/ticket.html?${p.toString()}`;
+}
+
+/**
+ * Abre el ticket en una nueva pestaña (opcionalmente con autoprint).
+ */
+function imprimirTicket(venta, efectivo, vuelto, items, autoprint = false) {
+  const url = buildTicketURL(venta, efectivo, vuelto, items, autoprint);
+  window.open(url, "_blank", "width=420,height=700,menubar=no,toolbar=no,location=no");
+}
+
+// ═══ COMPROBANTE (modal post-venta) ═══════════════════════════════════════════
+
+// Guardamos la última venta para poder reimprimir
+let ultimaVenta = null;
+
+function mostrarComprobante(venta, efectivo, vuelto, items) {
+  ultimaVenta = { venta, efectivo, vuelto, items };
+
   document.getElementById("comprobante-body").innerHTML = `
     <div class="comprobante-header">
-      <div>Factura Electrónica Tipo C</div>
-      <div>Pto. Venta: ${String(venta.punto_venta).padStart(4,"0")} | Comp. Nro: ${String(venta.nro_comprobante).padStart(8,"0")}</div>
-      <div class="comp-cae">CAE: ${venta.cae}</div>
-      <div>Vto. CAE: ${formatFechaCAE(venta.cae_vto)}</div>
+      ${venta.cae
+        ? `<div>Factura Electrónica Tipo C</div>
+           <div>Pto. Venta: ${String(venta.punto_venta||1).padStart(4,"0")} | Comp. Nro: ${String(venta.nro_comprobante||0).padStart(8,"0")}</div>
+           <div class="comp-cae">CAE: ${venta.cae}</div>
+           <div>Vto. CAE: ${formatFechaCAE(venta.cae_vto)}</div>`
+        : `<div style="font-size:1rem;font-weight:700">Comprobante Interno</div>
+           <div style="font-size:0.78rem;color:#888;margin-top:4px">Venta sin factura electrónica</div>`
+      }
     </div>
     <div class="comprobante-row"><span>Fecha</span><span class="val">${new Date().toLocaleString("es-AR")}</span></div>
     <div class="comprobante-row"><span>Cajero</span><span class="val">${escapeHtml(state.usuario.nombre)}</span></div>
     <div class="comprobante-row"><span>Venta ID</span><span class="val">#${venta.venta_id}</span></div>
+    <div class="comprobante-row"><span>Factura</span><span class="val" style="color:${venta.facturada?"var(--accent)":"var(--text-muted)"}">${venta.facturada?"✅ Con CAE":"— Sin factura"}</span></div>
     <div class="comprobante-row"><span>Efectivo</span><span class="val">${formatPeso(efectivo)}</span></div>
     <div class="comprobante-row"><span>Vuelto</span><span class="val">${formatPeso(vuelto)}</span></div>
-    <div class="comprobante-total"><span>TOTAL</span><span class="val">${formatPeso(venta.total)}</span></div>`;
+    <div class="comprobante-total"><span>TOTAL</span><span class="val">${formatPeso(venta.total)}</span></div>
+    <div class="comprobante-print-btns">
+      <button class="btn-ticket" onclick="imprimirTicket(ultimaVenta.venta, ultimaVenta.efectivo, ultimaVenta.vuelto, ultimaVenta.items, false)">
+        🖨 Ver e Imprimir Ticket
+      </button>
+      <button class="btn-ticket btn-ticket-auto" onclick="imprimirTicket(ultimaVenta.venta, ultimaVenta.efectivo, ultimaVenta.vuelto, ultimaVenta.items, true)">
+        ⚡ Imprimir Directo
+      </button>
+    </div>`;
   document.getElementById("modal-comprobante").classList.add("open");
 }
 
@@ -323,8 +436,16 @@ function renderizarVentas(ventas, paginacion, resumen) {
       <td class="td-precio">${formatPeso(v.efectivo)}</td>
       <td class="td-vuelto">${formatPeso(v.vuelto)}</td>
       <td class="td-cae" title="${v.cae||''}">${v.cae ? v.cae.slice(0,6)+"..." : "—"}</td>
-      <td><span class="estado-venta ${v.estado==="completada"?"estado-completada":"estado-procesando"}">${v.estado}</span></td>
-      <td><button class="btn-ver-detalle" onclick="verDetalleVenta(${v.id})">Ver detalle</button></td>
+      <td>
+        <span class="estado-venta ${v.estado==="completada"?"estado-completada":"estado-procesando"}">${v.estado}</span>
+        <span class="badge-facturada ${v.facturada?"badge-con-factura":"badge-sin-factura"}">${v.facturada?"facturada":"sin factura"}</span>
+      </td>
+      <td>
+        <div class="action-btns">
+          <button class="btn-ver-detalle" onclick="verDetalleVenta(${v.id})">Detalle</button>
+          <button class="btn-ver-detalle" onclick="reimprimirTicket(${v.id})" title="Reimprimir ticket">🖨</button>
+        </div>
+      </td>
     </tr>`).join("");
   renderizarPaginacion(paginacion);
 }
@@ -375,10 +496,64 @@ async function verDetalleVenta(id) {
           </tr>`).join("")}
         </tbody>
       </table>
-      <div class="detalle-total-row"><span>TOTAL</span><span>${formatPeso(v.total)}</span></div>`;
+      <div class="detalle-total-row"><span>TOTAL</span><span>${formatPeso(v.total)}</span></div>
+      <div style="margin-top:14px">
+        <button class="btn-ticket" style="width:100%" onclick="reimprimirTicket(${v.id})">🖨 Reimprimir Ticket</button>
+      </div>`;
   } catch (err) {
     if (err.message !== "Sesión expirada")
       body.innerHTML = `<p style="text-align:center;color:var(--danger);padding:24px">Error al cargar el detalle.</p>`;
+  }
+}
+
+/**
+ * Reimprime el ticket de una venta ya guardada en la BD.
+ * Trae el detalle completo desde el backend.
+ */
+async function reimprimirTicket(ventaId) {
+  try {
+    const res  = await apiFetch(`${API}/ventas/${ventaId}`);
+    const data = await res.json();
+    if (!res.ok || !data.success) throw new Error(data.mensaje);
+    const v = data.data;
+
+    const ventaFake = {
+      venta_id:        v.id,
+      punto_venta:     1,
+      nro_comprobante: ventaId,
+      total:           v.total,
+      cae:             v.cae     || "",
+      cae_vto:         v.cae_vto || "",
+    };
+    const itemsFake = (v.items || []).map(i => ({
+      nombre:      i.producto_nombre || i.nombre || "",
+      cantidad:    i.cantidad,
+      precio_unit: i.precio_unit,
+      subtotal:    i.subtotal,
+    }));
+
+    // Para reimprimir usamos la fecha original de la venta
+    const p = new URLSearchParams();
+    p.set("negocio",     CONFIG_NEGOCIO.nombre);
+    p.set("direccion",   CONFIG_NEGOCIO.direccion);
+    p.set("cuit",        CONFIG_NEGOCIO.cuit);
+    p.set("footer_extra",CONFIG_NEGOCIO.footer_extra);
+    p.set("venta_id",    v.id);
+    p.set("pto_venta",   "0001");
+    p.set("comprobante", String(v.id).padStart(8, "0"));
+    p.set("fecha",       v.creado_en || new Date().toLocaleString("es-AR"));
+    p.set("cajero",      v.cajero_nombre || "—");
+    p.set("total",       v.total);
+    p.set("efectivo",    v.efectivo);
+    p.set("vuelto",      v.vuelto);
+    p.set("cae",         v.cae || "");
+    p.set("cae_vto",     v.cae_vto || "");
+    p.set("items",       encodeURIComponent(JSON.stringify(itemsFake)));
+
+    window.open(`/ticket.html?${p.toString()}`, "_blank", "width=420,height=700,menubar=no,toolbar=no,location=no");
+
+  } catch (err) {
+    if (err.message !== "Sesión expirada") mostrarToast("Error al cargar ticket.", "error");
   }
 }
 
@@ -391,18 +566,13 @@ function cerrarModalDetalleVenta(e) {
 
 async function cargarCaja() {
   const fecha = document.getElementById("caja-fecha").value || new Date().toISOString().split("T")[0];
-
-  // Reset KPIs
   ["kpi-total","kpi-cantidad","kpi-efectivo","kpi-vuelto"].forEach(id => document.getElementById(id).textContent = "...");
-
   try {
     const res  = await apiFetch(`${API}/caja/resumen?fecha=${fecha}`);
     const data = await res.json();
     if (!res.ok || !data.success) throw new Error(data.mensaje);
-
     const { totales, porCajero, topProductos, porHora, cierreExistente } = data.data;
 
-    // ── KPIs ──────────────────────────────────────────────────────────────────
     const cant  = totales.cantidad_ventas || 0;
     const monto = totales.monto_total     || 0;
     document.getElementById("kpi-total").textContent      = formatPeso(monto);
@@ -412,99 +582,68 @@ async function cargarCaja() {
     document.getElementById("kpi-efectivo").textContent   = formatPeso(totales.total_efectivo || 0);
     document.getElementById("kpi-vuelto").textContent     = formatPeso(totales.total_vuelto   || 0);
 
-    // ── Por cajero ────────────────────────────────────────────────────────────
     const cajEl = document.getElementById("cajeros-content");
-    if (!porCajero.length) {
-      cajEl.innerHTML = `<p class="empty-state">Sin ventas en esta fecha.</p>`;
-    } else {
+    if (!porCajero.length) { cajEl.innerHTML = `<p class="empty-state">Sin ventas en esta fecha.</p>`; }
+    else {
       const maxMonto = Math.max(...porCajero.map(c => c.monto));
       cajEl.innerHTML = porCajero.map(c => `
         <div class="cajero-row">
           <span class="cajero-nombre">${escapeHtml(c.cajero)}</span>
           <span class="cajero-cantidad">${c.cantidad} ventas</span>
-          <div class="cajero-bar-wrap">
-            <div class="cajero-bar" style="width:${maxMonto > 0 ? (c.monto/maxMonto*100) : 0}%"></div>
-          </div>
+          <div class="cajero-bar-wrap"><div class="cajero-bar" style="width:${maxMonto>0?(c.monto/maxMonto*100):0}%"></div></div>
           <span class="cajero-monto">${formatPeso(c.monto)}</span>
         </div>`).join("");
     }
 
-    // ── Top productos ─────────────────────────────────────────────────────────
     const topEl = document.getElementById("top-productos-content");
-    if (!topProductos.length) {
-      topEl.innerHTML = `<p class="empty-state">Sin ventas en esta fecha.</p>`;
-    } else {
+    if (!topProductos.length) { topEl.innerHTML = `<p class="empty-state">Sin ventas en esta fecha.</p>`; }
+    else {
       topEl.innerHTML = topProductos.map((p, i) => `
         <div class="producto-row">
-          <span class="producto-pos">${i + 1}</span>
+          <span class="producto-pos">${i+1}</span>
           <span class="producto-nombre" title="${escapeHtml(p.nombre)}">${escapeHtml(p.nombre)}</span>
           <span class="producto-unidades">${p.unidades} u.</span>
           <span class="producto-total">${formatPeso(p.total_vendido)}</span>
         </div>`).join("");
     }
 
-    // ── Gráfico por hora ──────────────────────────────────────────────────────
     renderizarGraficoHoras(porHora);
 
-    // ── Panel cierre ──────────────────────────────────────────────────────────
     document.getElementById("cierre-info-sub").textContent =
       `Fecha: ${fecha} | Estado: ${cierreExistente ? "✅ cerrada" : "⏳ pendiente"}`;
 
     const accionEl = document.getElementById("cierre-accion");
     if (cierreExistente) {
-      accionEl.innerHTML = `
-        <div class="cierre-ya-realizado">
-          ✅ Caja cerrada a las ${cierreExistente.creado_en ? cierreExistente.creado_en.split(" ")[1] : "—"}
-        </div>`;
+      accionEl.innerHTML = `<div class="cierre-ya-realizado">✅ Caja cerrada a las ${cierreExistente.creado_en ? cierreExistente.creado_en.split(" ")[1] : "—"}</div>`;
       document.getElementById("cierre-notas").value    = cierreExistente.notas || "";
       document.getElementById("cierre-notas").disabled = true;
     } else {
-      accionEl.innerHTML = `
-        <button class="btn-cerrar-caja" onclick="cerrarCaja()" id="btn-cerrar-caja">
-          🔒 Registrar Cierre
-        </button>`;
+      accionEl.innerHTML = `<button class="btn-cerrar-caja" onclick="cerrarCaja()" id="btn-cerrar-caja">🔒 Registrar Cierre</button>`;
       document.getElementById("cierre-notas").disabled = false;
     }
 
-    // ── Historial de cierres ──────────────────────────────────────────────────
     cargarHistorialCierres();
-
   } catch (err) {
-    if (err.message !== "Sesión expirada")
-      mostrarToast("Error al cargar datos de caja.", "error");
+    if (err.message !== "Sesión expirada") mostrarToast("Error al cargar datos de caja.", "error");
   }
 }
 
 function renderizarGraficoHoras(porHora) {
   const container = document.getElementById("grafico-horas-content");
-
-  // Crear mapa de todas las horas 0-23 con montos
   const mapaHoras = {};
   porHora.forEach(h => { mapaHoras[h.hora] = h; });
-
   const maxMonto = porHora.length > 0 ? Math.max(...porHora.map(h => h.monto)) : 0;
-
-  if (maxMonto === 0) {
-    container.innerHTML = `<p class="empty-state" style="width:100%">Sin actividad registrada.</p>`;
-    return;
-  }
-
-  // Mostrar solo horas de 6 a 23 para no desperdiciar espacio
+  if (maxMonto === 0) { container.innerHTML = `<p class="empty-state" style="width:100%">Sin actividad registrada.</p>`; return; }
   let html = "";
   for (let h = 6; h <= 23; h++) {
-    const datos    = mapaHoras[h];
-    const monto    = datos ? datos.monto : 0;
-    const cantidad = datos ? datos.cantidad : 0;
-    const pct      = maxMonto > 0 ? Math.round((monto / maxMonto) * 100) : 0;
-    const activa   = cantidad > 0 ? "barra-activa" : "";
-
-    html += `
-      <div class="barra-hora">
-        <div class="barra-fill ${activa}" style="height:${Math.max(pct, 0)}%">
-          ${cantidad > 0 ? `<div class="barra-tooltip">${formatPeso(monto)}<br>${cantidad} venta${cantidad!==1?"s":""}</div>` : ""}
-        </div>
-        <span class="barra-label">${String(h).padStart(2,"0")}</span>
-      </div>`;
+    const datos = mapaHoras[h], monto = datos ? datos.monto : 0, cantidad = datos ? datos.cantidad : 0;
+    const pct = maxMonto > 0 ? Math.round((monto / maxMonto) * 100) : 0;
+    html += `<div class="barra-hora">
+      <div class="barra-fill ${cantidad>0?"barra-activa":""}" style="height:${Math.max(pct,0)}%">
+        ${cantidad>0?`<div class="barra-tooltip">${formatPeso(monto)}<br>${cantidad} venta${cantidad!==1?"s":""}</div>`:""}
+      </div>
+      <span class="barra-label">${String(h).padStart(2,"0")}</span>
+    </div>`;
   }
   container.innerHTML = html;
 }
@@ -513,27 +652,16 @@ async function cerrarCaja() {
   const fecha = document.getElementById("caja-fecha").value || new Date().toISOString().split("T")[0];
   const notas = document.getElementById("cierre-notas").value.trim();
   const btn   = document.getElementById("btn-cerrar-caja");
-
-  const hoy = new Date().toISOString().split("T")[0];
-  if (fecha !== hoy) {
-    if (!confirm(`¿Estás seguro de registrar el cierre para la fecha ${fecha}? No es el día de hoy.`)) return;
-  } else {
-    if (!confirm(`¿Confirmar el cierre de caja del día de hoy (${fecha})?`)) return;
-  }
-
+  const hoy   = new Date().toISOString().split("T")[0];
+  if (fecha !== hoy && !confirm(`¿Registrar cierre para ${fecha} (no es hoy)?`)) return;
+  else if (fecha === hoy && !confirm(`¿Confirmar el cierre de caja del día de hoy (${fecha})?`)) return;
   btn.disabled = true; btn.textContent = "Registrando...";
-
   try {
-    const res  = await apiFetch(`${API}/caja/cerrar?fecha=${fecha}`, {
-      method: "POST",
-      body: JSON.stringify({ notas }),
-    });
+    const res  = await apiFetch(`${API}/caja/cerrar?fecha=${fecha}`, { method: "POST", body: JSON.stringify({ notas }) });
     const data = await res.json();
     if (!res.ok || !data.success) throw new Error(data.mensaje);
-
-    mostrarToast(`Cierre de caja del ${fecha} registrado. Total: ${formatPeso(data.data.monto_total)}`, "success");
-    cargarCaja(); // recargar para mostrar el estado actualizado
-
+    mostrarToast(`Cierre registrado. Total: ${formatPeso(data.data.monto_total)}`, "success");
+    cargarCaja();
   } catch (err) {
     if (err.message !== "Sesión expirada") mostrarToast(`Error: ${err.message}`, "error");
     btn.disabled = false; btn.textContent = "🔒 Registrar Cierre";
@@ -546,12 +674,7 @@ async function cargarHistorialCierres() {
     const res  = await apiFetch(`${API}/caja/historial?limite=15`);
     const data = await res.json();
     if (!res.ok || !data.success) throw new Error(data.mensaje);
-
-    if (!data.data.length) {
-      tbody.innerHTML = `<tr><td colspan="8" class="empty-state">No hay cierres registrados aún.</td></tr>`;
-      return;
-    }
-
+    if (!data.data.length) { tbody.innerHTML = `<tr><td colspan="8" class="empty-state">No hay cierres registrados aún.</td></tr>`; return; }
     tbody.innerHTML = data.data.map(c => `
       <tr>
         <td class="historial-fecha">${c.fecha}</td>
@@ -559,9 +682,9 @@ async function cargarHistorialCierres() {
         <td class="historial-monto">${formatPeso(c.monto_total)}</td>
         <td style="font-family:var(--font-mono)">${formatPeso(c.total_efectivo)}</td>
         <td style="font-family:var(--font-mono);color:var(--text-muted)">${formatPeso(c.total_vuelto)}</td>
-        <td>${escapeHtml(c.admin_nombre || "—")}</td>
-        <td class="td-fecha">${c.creado_en ? c.creado_en.split(" ")[1] || c.creado_en : "—"}</td>
-        <td style="color:var(--text-muted);font-size:0.8rem">${escapeHtml(c.notas || "—")}</td>
+        <td>${escapeHtml(c.admin_nombre||"—")}</td>
+        <td class="td-fecha">${c.creado_en?c.creado_en.split(" ")[1]||c.creado_en:"—"}</td>
+        <td style="color:var(--text-muted);font-size:0.8rem">${escapeHtml(c.notas||"—")}</td>
       </tr>`).join("");
   } catch (err) {
     if (err.message !== "Sesión expirada")
@@ -710,6 +833,76 @@ async function eliminarUsuario(id,nombre) {
     if (!res.ok||!data.success) throw new Error(data.mensaje);
     mostrarToast(`Usuario "${nombre}" eliminado.`,"success"); cargarUsuarios();
   } catch (err) { if (err.message!=="Sesión expirada") mostrarToast(`Error: ${err.message}`,"error"); }
+}
+
+
+// ═══ BACKUP ═══════════════════════════════════════════════════════════════════
+
+async function cargarBackups() {
+  const tbody = document.getElementById("backup-lista-body");
+  if (!tbody) return;
+  try {
+    const res  = await apiFetch(`${API}/backup`);
+    const data = await res.json();
+    if (!res.ok || !data.success) throw new Error(data.mensaje);
+
+    // Mostrar el último backup en el panel superior
+    const subEl = document.getElementById("backup-ultimo");
+    if (data.data.length > 0) {
+      const ultimo = data.data[0];
+      subEl.textContent = `Último backup: ${ultimo.archivo} — ${ultimo.fecha} (${ultimo.tamano_kb} KB)`;
+      subEl.classList.add("backup-reciente");
+    } else {
+      subEl.textContent = "No hay backups registrados todavía.";
+    }
+
+    // Tabla de historial
+    if (!data.data.length) {
+      tbody.innerHTML = `<tr><td colspan="3" class="empty-state">No hay backups todavía. Se crean automáticamente cada día.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = data.data.map((b, i) => `
+      <tr>
+        <td class="backup-nombre">${b.nombre}</td>
+        <td class="backup-tamano">${b.tamano_kb} KB</td>
+        <td class="backup-fecha ${i === 0 ? "backup-reciente" : ""}">${b.fecha}</td>
+      </tr>`).join("");
+  } catch (err) {
+    if (err.message !== "Sesión expirada") {
+      if (tbody) tbody.innerHTML = `<tr><td colspan="3" class="empty-state" style="color:var(--danger)">Error al cargar backups.</td></tr>`;
+    }
+  }
+}
+
+async function hacerBackupManual() {
+  const btn     = document.getElementById("btn-backup-manual");
+  const subEl   = document.getElementById("backup-ultimo");
+  btn.disabled  = true;
+  btn.textContent = "⏳ Generando...";
+
+  try {
+    const res  = await apiFetch(`${API}/backup`, { method: "POST" });
+    const data = await res.json();
+    if (!res.ok || !data.success) throw new Error(data.mensaje);
+
+    btn.textContent = "✅ Backup listo";
+    btn.classList.add("backup-ok");
+    mostrarToast(`Backup generado: ${data.data.archivo} (${data.data.tamano_kb} KB)`, "success");
+
+    // Recargar lista
+    await cargarBackups();
+
+    setTimeout(() => {
+      btn.disabled    = false;
+      btn.textContent = "💾 Hacer Backup Ahora";
+      btn.classList.remove("backup-ok");
+    }, 3000);
+
+  } catch (err) {
+    if (err.message !== "Sesión expirada") mostrarToast(`Error: ${err.message}`, "error");
+    btn.disabled    = false;
+    btn.textContent = "💾 Hacer Backup Ahora";
+  }
 }
 
 // ═══ UTILIDADES ═══════════════════════════════════════════════════════════════

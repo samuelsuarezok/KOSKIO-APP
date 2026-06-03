@@ -228,6 +228,37 @@
         </table>
       </div>
 
+
+      <!-- Panel de backup -->
+      <div class="backup-panel">
+        <div class="backup-panel-left">
+          <div class="backup-panel-title">💾 Respaldo de Base de Datos</div>
+          <div class="backup-panel-sub" id="backup-ultimo">Último backup: cargando...</div>
+        </div>
+        <div class="backup-panel-right">
+          <button class="btn-backup" id="btn-backup-manual" onclick="hacerBackupManual()">
+            💾 Hacer Backup Ahora
+          </button>
+        </div>
+      </div>
+
+      <!-- Historial de backups -->
+      <div class="historial-cierres">
+        <div class="historial-cierres-title">Historial de Backups (últimos 30)</div>
+        <table class="historial-table">
+          <thead>
+            <tr>
+              <th>Archivo</th>
+              <th>Tamaño</th>
+              <th>Fecha y hora</th>
+            </tr>
+          </thead>
+          <tbody id="backup-lista-body">
+            <tr><td colspan="3" class="empty-state">Cargando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
     </div>
   </main>
 
@@ -276,34 +307,60 @@
     <div class="modal-box">
       <div class="modal-header"><h3>💳 Procesar Cobro</h3><button class="modal-close" onclick="cerrarModalCobro()">✕</button></div>
       <div class="modal-body">
-        <div class="cobro-total-display">
-          <span class="cobro-label">Total a Cobrar</span>
-          <span id="modal-total" class="cobro-amount">$0,00</span>
+
+        <!-- PASO 1: Efectivo -->
+        <div id="cobro-paso-1">
+          <div class="cobro-total-display">
+            <span class="cobro-label">Total a Cobrar</span>
+            <span id="modal-total" class="cobro-amount">$0,00</span>
+          </div>
+          <div class="cobro-input-group">
+            <label for="input-efectivo">Efectivo recibido ($)</label>
+            <input type="number" id="input-efectivo" class="cobro-input" placeholder="0,00"
+              min="0" step="0.01" oninput="calcularVuelto()" onkeydown="handleCobroKey(event)" />
+          </div>
+          <div class="billetes-rapidos">
+            <span class="billetes-label">Rápido:</span>
+            <button class="billet-btn" onclick="setBillete(500)">$500</button>
+            <button class="billet-btn" onclick="setBillete(1000)">$1.000</button>
+            <button class="billet-btn" onclick="setBillete(2000)">$2.000</button>
+            <button class="billet-btn" onclick="setBillete(5000)">$5.000</button>
+            <button class="billet-btn" onclick="setBillete(10000)">$10.000</button>
+            <button class="billet-btn" onclick="setBillete(20000)">$20.000</button>
+          </div>
+          <div class="vuelto-display">
+            <span class="vuelto-label">Vuelto</span>
+            <span id="modal-vuelto" class="vuelto-amount neutral">—</span>
+          </div>
+          <div id="cobro-error" class="cobro-error hidden"></div>
         </div>
-        <div class="cobro-input-group">
-          <label for="input-efectivo">Efectivo recibido ($)</label>
-          <input type="number" id="input-efectivo" class="cobro-input" placeholder="0,00"
-            min="0" step="0.01" oninput="calcularVuelto()" onkeydown="handleCobroKey(event)" />
+
+        <!-- PASO 2: ¿Facturar? -->
+        <div id="cobro-paso-2" class="hidden">
+          <div class="factura-pregunta">
+            <div class="factura-pregunta-icon">🧾</div>
+            <div class="factura-pregunta-titulo">¿El cliente necesita factura?</div>
+            <div class="factura-pregunta-sub">Podés emitir factura electrónica o solo registrar la venta</div>
+          </div>
+          <div class="factura-opciones">
+            <button class="factura-opcion factura-si" onclick="procesarVenta(true)">
+              <span class="factura-opcion-icon">✅</span>
+              <span class="factura-opcion-titulo">Sí, generar factura</span>
+              <span class="factura-opcion-sub">Emite CAE electrónico</span>
+            </button>
+            <button class="factura-opcion factura-no" onclick="procesarVenta(false)">
+              <span class="factura-opcion-icon">🧾</span>
+              <span class="factura-opcion-titulo">No, solo ticket</span>
+              <span class="factura-opcion-sub">Registra sin factura</span>
+            </button>
+          </div>
         </div>
-        <div class="billetes-rapidos">
-          <span class="billetes-label">Rápido:</span>
-          <button class="billet-btn" onclick="setBillete(500)">$500</button>
-          <button class="billet-btn" onclick="setBillete(1000)">$1.000</button>
-          <button class="billet-btn" onclick="setBillete(2000)">$2.000</button>
-          <button class="billet-btn" onclick="setBillete(5000)">$5.000</button>
-          <button class="billet-btn" onclick="setBillete(10000)">$10.000</button>
-          <button class="billet-btn" onclick="setBillete(20000)">$20.000</button>
-        </div>
-        <div class="vuelto-display">
-          <span class="vuelto-label">Vuelto</span>
-          <span id="modal-vuelto" class="vuelto-amount neutral">—</span>
-        </div>
-        <div id="cobro-error" class="cobro-error hidden"></div>
+
       </div>
-      <div class="modal-footer">
+      <div class="modal-footer" id="cobro-footer">
         <button class="btn-cancelar" onclick="cerrarModalCobro()">Cancelar</button>
-        <button class="btn-confirmar" id="btn-confirmar" onclick="procesarVenta()" disabled>
-          <span id="btn-confirmar-text">Confirmar Venta</span><kbd>ENTER</kbd>
+        <button class="btn-confirmar" id="btn-confirmar" onclick="irAPasoFactura()" disabled>
+          <span id="btn-confirmar-text">Continuar</span><kbd>ENTER</kbd>
         </button>
       </div>
     </div>
