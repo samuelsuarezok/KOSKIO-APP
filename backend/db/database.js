@@ -5,8 +5,12 @@ const fs        = require("fs");
 const path      = require("path");
 const bcrypt    = require("bcryptjs");
 
-const DB_PATH = path.join(__dirname, "..", "pos_data.db");
+// Path de la BD. Overrideable por env var SOLO para testabilidad: permite correr
+// los tests contra una DB descartable sin tocar el pos_data.db real de producción.
+// (No tiene nada que ver con MCP — es el seam que necesita la suite de tests.)
+const DB_PATH = process.env.KOSKIO_DB_PATH || path.join(__dirname, "..", "pos_data.db");
 let db = null;
+let _lastInsertId = 0;
 
 function persistirEnDisco() {
   try {
@@ -16,7 +20,37 @@ function persistirEnDisco() {
   }
 }
 
-function run(sql, params = []) { db.run(sql, params); persistirEnDisco(); }
+function _ejecutar(sql, params = []) {
+  db.run(sql, params);
+  // ⚠ db.export() (dentro de persistirEnDisco) resetea last_insert_rowid() a 0.
+  // Por eso capturamos el id ACÁ, ANTES de exportar, y lo cacheamos.
+  const r = db.exec("SELECT last_insert_rowid() AS id");
+  _lastInsertId = r.length ? r[0].values[0][0] : 0;
+}
+
+function run(sql, params = []) {
+  _ejecutar(sql, params);
+  persistirEnDisco();
+}
+
+// Ejecuta `fn` como una transacción ATÓMICA (todo-o-nada). Persiste a disco UNA
+// sola vez al confirmar (no por cada escritura). Si `fn` lanza, hace ROLLBACK y
+// NO toca el disco: la BD en memoria vuelve al estado previo. Indispensable para
+// operaciones multi-escritura como una venta (venta + ítems + stock).
+// El callback recibe un `tx` con la misma interfaz pero con un `run` que NO
+// persiste — el commit se encarga de persistir al final.
+function transaction(fn) {
+  db.run("BEGIN");
+  try {
+    const resultado = fn({ run: _ejecutar, get, all, lastInsertRowid });
+    db.run("COMMIT");
+    persistirEnDisco();           // único write a disco, recién al confirmar
+    return resultado;
+  } catch (err) {
+    try { db.run("ROLLBACK"); } catch (_) {}  // revierte en memoria; disco intacto
+    throw err;
+  }
+}
 
 function get(sql, params = []) {
   const stmt = db.prepare(sql);
@@ -32,7 +66,7 @@ function all(sql, params = []) {
   return values.map(row => { const obj = {}; columns.forEach((col, i) => { obj[col] = row[i]; }); return obj; });
 }
 
-function lastInsertRowid() { const row = get("SELECT last_insert_rowid() as id"); return row ? row.id : null; }
+function lastInsertRowid() { return _lastInsertId; }
 
 async function initDatabase() {
   const SQL = await initSqlJs();
@@ -64,9 +98,13 @@ async function initDatabase() {
     cae        TEXT,
     cae_vto    TEXT,
     estado     TEXT DEFAULT 'completada',
+    facturada  INTEGER NOT NULL DEFAULT 0,
     usuario_id INTEGER,
     creado_en  TEXT DEFAULT (datetime('now', 'localtime'))
   )`);
+  // Migración: agregar columna facturada si no existe (para BDs creadas antes
+  // de que routes/ventas.js empezara a usarla). El try/catch la hace idempotente.
+  try { db.run("ALTER TABLE ventas ADD COLUMN facturada INTEGER NOT NULL DEFAULT 0"); } catch (_) {}
 
   db.run(`CREATE TABLE IF NOT EXISTS venta_items (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -108,6 +146,20 @@ async function initDatabase() {
   if (!cp || cp.c === 0) seedProductos();
   const cu = get("SELECT COUNT(*) as c FROM usuarios");
   if (!cu || cu.c === 0) seedAdmin();
+
+  advertirPasswordPorDefecto();
+}
+
+// Aviso de seguridad: si el admin todavía usa la contraseña por defecto (admin123),
+// lo gritamos en cada arranque. No la forzamos a cambiar (eso requiere flujo de UI),
+// pero el dueño tiene que enterarse.
+function advertirPasswordPorDefecto() {
+  try {
+    const admin = get("SELECT password_hash FROM usuarios WHERE usuario = 'admin' AND activo = 1");
+    if (admin && bcrypt.compareSync("admin123", admin.password_hash)) {
+      console.warn("⚠ SEGURIDAD: el usuario 'admin' usa la contraseña por defecto (admin123). Cambiala YA.");
+    }
+  } catch (_) {}
 }
 
 function seedProductos() {
@@ -134,7 +186,7 @@ function seedAdmin() {
 
 function getDb() {
   if (!db) throw new Error("BD no inicializada.");
-  return { run, get, all, lastInsertRowid };
+  return { run, get, all, lastInsertRowid, transaction };
 }
 
 module.exports = { initDatabase, getDb };

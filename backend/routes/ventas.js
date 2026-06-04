@@ -19,48 +19,45 @@ router.post("/", async (req, res) => {
     const usuario_id = req.usuario ? req.usuario.id : null;
     const facturar   = generar_factura === true;
 
-    // 1. Verificar stock
-    for (const item of items) {
-      const prod = db.get("SELECT id, nombre, stock FROM productos WHERE id = ?", [item.producto_id]);
-      if (!prod) throw new Error(`Producto ID ${item.producto_id} no encontrado.`);
-      if (prod.stock < item.cantidad) throw new Error(`Stock insuficiente para "${prod.nombre}".`);
-    }
+    // 1. Generar el CAE ANTES de tocar la BD. Es la parte lenta y que puede
+    //    fallar (AFIP). Si falla, lanzamos y NO se registra ninguna venta.
+    const resultadoCAE = await generarCAE({ total, items, generar_factura: facturar });
 
-    // 2. Insertar venta con campo facturada
-    db.run(
-      "INSERT INTO ventas (total, efectivo, vuelto, estado, usuario_id, facturada) VALUES (?, ?, ?, 'procesando', ?, ?)",
-      [total, efectivo, vuelto, usuario_id, facturar ? 1 : 0]
-    );
-    const ventaId = db.lastInsertRowid();
+    // 2. Persistir venta + ítems + stock de forma ATÓMICA (todo-o-nada).
+    //    El callback es 100% síncrono: no hay await adentro, así que ninguna
+    //    otra request se intercala entre el chequeo de stock y el descuento.
+    const ventaId = db.transaction((tx) => {
+      // Validar stock DENTRO de la transacción (consistencia bajo concurrencia)
+      for (const item of items) {
+        const prod = tx.get("SELECT id, nombre, stock FROM productos WHERE id = ?", [item.producto_id]);
+        if (!prod) throw new Error(`Producto ID ${item.producto_id} no encontrado.`);
+        if (prod.stock < item.cantidad) throw new Error(`Stock insuficiente para "${prod.nombre}".`);
+      }
 
-    // 3. Insertar ítems
-    for (const item of items) {
-      db.run(
-        "INSERT INTO venta_items (venta_id, producto_id, cantidad, precio_unit, subtotal) VALUES (?,?,?,?,?)",
-        [ventaId, item.producto_id, item.cantidad, item.precio_unit, item.subtotal]
+      // La venta nace COMPLETADA, con el CAE ya resuelto (o null si no se facturó).
+      tx.run(
+        "INSERT INTO ventas (total, efectivo, vuelto, cae, cae_vto, estado, usuario_id, facturada) VALUES (?, ?, ?, ?, ?, 'completada', ?, ?)",
+        [total, efectivo, vuelto,
+         resultadoCAE ? resultadoCAE.cae : null,
+         resultadoCAE ? resultadoCAE.cae_fch_vto : null,
+         usuario_id, facturar ? 1 : 0]
       );
-    }
+      const id = tx.lastInsertRowid();
 
-    // 4. Descontar stock
-    for (const item of items) {
-      db.run(
-        "UPDATE productos SET stock = stock - ?, actualizado_en = datetime('now','localtime') WHERE id = ?",
-        [item.cantidad, item.producto_id]
-      );
-    }
-
-    // 5. Generar CAE solo si el cajero lo pidió
-    const resultadoCAE = await generarCAE({ venta_id: ventaId, total, items, generar_factura: facturar });
-
-    // 6. Actualizar venta con resultado
-    if (resultadoCAE) {
-      db.run(
-        "UPDATE ventas SET cae=?, cae_vto=?, estado='completada' WHERE id=?",
-        [resultadoCAE.cae, resultadoCAE.cae_fch_vto, ventaId]
-      );
-    } else {
-      db.run("UPDATE ventas SET estado='completada' WHERE id=?", [ventaId]);
-    }
+      for (const item of items) {
+        tx.run(
+          "INSERT INTO venta_items (venta_id, producto_id, cantidad, precio_unit, subtotal) VALUES (?,?,?,?,?)",
+          [id, item.producto_id, item.cantidad, item.precio_unit, item.subtotal]
+        );
+      }
+      for (const item of items) {
+        tx.run(
+          "UPDATE productos SET stock = stock - ?, actualizado_en = datetime('now','localtime') WHERE id = ?",
+          [item.cantidad, item.producto_id]
+        );
+      }
+      return id;
+    });
 
     res.status(201).json({
       success: true,

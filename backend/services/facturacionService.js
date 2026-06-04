@@ -40,7 +40,7 @@ const AFIP_CONFIG = {
 async function generarCAE(datosVenta) {
   // Si el cajero eligió no facturar, retornar null directamente
   if (!datosVenta.generar_factura) {
-    console.log(`📄 Venta #${datosVenta.venta_id} registrada SIN factura electrónica.`);
+    console.log(`📄 Venta registrada SIN factura electrónica.`);
     return null;
   }
 
@@ -53,7 +53,7 @@ async function generarCAE(datosVenta) {
 
 // ─── MODO MOCK ────────────────────────────────────────────────────────────────
 async function _generarCAEMock(datosVenta) {
-  console.log(`\n🔐 [AFIP MOCK] Facturando venta #${datosVenta.venta_id}...`);
+  console.log(`\n🔐 [AFIP MOCK] Facturando venta por $${datosVenta.total}...`);
   console.log("   → Obteniendo Ticket de Acceso (WSAA)...");
   await _delay(500);
   console.log("   ✓ Ticket obtenido.");
