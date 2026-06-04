@@ -62,9 +62,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("header-rol").textContent    = state.usuario.rol.toUpperCase();
 
   const esAdmin = state.usuario.rol === "admin";
-  ["nav-caja","nav-inventario","nav-usuarios"].forEach(id => {
-    document.getElementById(id).style.display = esAdmin ? "flex" : "none";
-  });
+  // Caja e inventario: visibles para todos
+  // Usuarios y backup: solo admin
+  document.getElementById("nav-caja").style.display      = "flex";
+  document.getElementById("nav-inventario").style.display = "flex";
+  document.getElementById("nav-usuarios").style.display  = esAdmin ? "flex" : "none";
 
   const hoy = new Date().toISOString().split("T")[0];
   document.getElementById("filtro-desde").value = hoy;
@@ -85,7 +87,7 @@ function iniciarReloj() {
 // ═══ NAVEGACIÓN ═══════════════════════════════════════════════════════════════
 
 function switchView(vista) {
-  const soloAdmin = ["caja", "inventario", "usuarios"];
+  const soloAdmin = ["usuarios"];
   if (soloAdmin.includes(vista) && state.usuario.rol !== "admin") {
     mostrarToast("No tenés permisos para esa sección.", "error"); return;
   }
@@ -98,7 +100,12 @@ function switchView(vista) {
   if (vista === "pos")        setTimeout(() => document.getElementById("barcode-input").focus(), 50);
   if (vista === "ventas")     cargarVentas();
   if (vista === "caja")       { cargarCaja(); cargarBackups(); }
-  if (vista === "inventario") cargarInventario();
+  if (vista === "inventario") {
+    cargarInventario();
+    // Mostrar/ocultar botón nuevo producto según rol
+    const btnNuevo = document.getElementById("btn-nuevo-producto");
+    if (btnNuevo) btnNuevo.style.display = state.usuario.rol === "admin" ? "" : "none";
+  }
   if (vista === "usuarios")   cargarUsuarios();
 }
 
@@ -572,6 +579,19 @@ async function cargarCaja() {
     const data = await res.json();
     if (!res.ok || !data.success) throw new Error(data.mensaje);
     const { totales, porCajero, topProductos, porHora, cierreExistente } = data.data;
+    const esAdmin = data.esAdmin;
+
+    // Mostrar u ocultar secciones según rol
+    const panelCajeros   = document.getElementById("panel-cajeros");
+    const historialEl    = document.querySelector(".historial-cierres");
+    const backupPanelEl  = document.querySelector(".backup-panel");
+    if (panelCajeros)  panelCajeros.style.display  = esAdmin ? "" : "none";
+    if (historialEl)   historialEl.style.display    = esAdmin ? "" : "none";
+    if (backupPanelEl) backupPanelEl.style.display  = esAdmin ? "" : "none";
+
+    // Título del panel KPI según rol
+    const kpiTotalLabel = document.querySelector(".kpi-card.kpi-primary .kpi-label");
+    if (kpiTotalLabel) kpiTotalLabel.textContent = esAdmin ? "Monto Total Vendido" : "Mis Ventas del Día";
 
     const cant  = totales.cantidad_ventas || 0;
     const monto = totales.monto_total     || 0;
@@ -715,15 +735,16 @@ function renderizarInventario(productos) {
   if (!productos.length) { tbody.innerHTML = `<tr><td colspan="7" class="loading-row">No se encontraron productos.</td></tr>`; return; }
   tbody.innerHTML = productos.map(p => {
     const sc = p.stock === 0 ? "stock-cero" : p.stock <= 5 ? "stock-bajo" : "stock-ok";
+    const esAdmin = state.usuario.rol === "admin";
     return `<tr>
       <td class="td-id">${p.id}</td><td class="td-codigo">${escapeHtml(p.codigo_barras)}</td>
       <td class="td-nombre">${escapeHtml(p.nombre)}</td><td class="td-precio">${formatPeso(p.precio)}</td>
       <td class="td-stock ${sc}">${p.stock}</td>
       <td class="td-fecha">${p.actualizado_en?p.actualizado_en.split(" ")[0]:"—"}</td>
-      <td><div class="action-btns">
+      <td>${esAdmin ? `<div class="action-btns">
         <button class="btn-edit" onclick="abrirModalProducto(${p.id})">Editar</button>
         <button class="btn-delete" onclick="eliminarProducto(${p.id},'${escapeHtml(p.nombre)}')">✕</button>
-      </div></td></tr>`;
+      </div>` : `<span class="readonly-badge">Solo lectura</span>`}</td></tr>`;
   }).join("");
 }
 

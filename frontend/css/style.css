@@ -981,3 +981,15 @@ select.form-input option { background: var(--bg-elevated); }
   color: var(--text-muted);
   border: 1px solid var(--border-light);
 }
+
+/* ─── INVENTARIO SOLO LECTURA ────────────────────────────────────────────────── */
+.readonly-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
