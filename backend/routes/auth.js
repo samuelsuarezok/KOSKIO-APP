@@ -8,6 +8,9 @@ const jwt = require("jsonwebtoken");
 const { getDb } = require("../db/database");
 const { verificarToken, soloAdmin, JWT_SECRET } = require("../middleware/auth");
 
+// Largo mínimo de contraseña. No es un banco, pero 4 era demasiado débil.
+const PASSWORD_MIN = 8;
+
 // ─── POST /api/auth/login ──────────────────────────────────────────────────────
 // Login: valida credenciales y devuelve un JWT
 router.post("/login", (req, res) => {
@@ -91,8 +94,8 @@ router.post("/usuarios", verificarToken, soloAdmin, (req, res) => {
   if (!["admin", "cajero"].includes(rol)) {
     return res.status(400).json({ success: false, mensaje: "Rol inválido. Debe ser 'admin' o 'cajero'." });
   }
-  if (password.length < 4) {
-    return res.status(400).json({ success: false, mensaje: "La contraseña debe tener al menos 4 caracteres." });
+  if (password.length < PASSWORD_MIN) {
+    return res.status(400).json({ success: false, mensaje: `La contraseña debe tener al menos ${PASSWORD_MIN} caracteres.` });
   }
 
   try {
@@ -145,8 +148,8 @@ router.put("/usuarios/:id", verificarToken, soloAdmin, (req, res) => {
     // Si se envía nueva contraseña, hashearla
     let nuevoHash = user.password_hash;
     if (password && password.trim().length > 0) {
-      if (password.length < 4) {
-        return res.status(400).json({ success: false, mensaje: "La contraseña debe tener al menos 4 caracteres." });
+      if (password.length < PASSWORD_MIN) {
+        return res.status(400).json({ success: false, mensaje: `La contraseña debe tener al menos ${PASSWORD_MIN} caracteres.` });
       }
       nuevoHash = bcrypt.hashSync(password, 10);
     }

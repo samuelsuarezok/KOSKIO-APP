@@ -1,8 +1,38 @@
 // middleware/auth.js
 // Middleware de autenticación JWT — protege todas las rutas de la API
 
-const jwt = require("jsonwebtoken");
-const JWT_SECRET = process.env.JWT_SECRET || "pos_argentina_secret_2024_cambiar_en_produccion";
+const jwt    = require("jsonwebtoken");
+const crypto = require("crypto");
+
+// Resuelve el secreto de firma de los JWT. NUNCA hay un fallback público en el
+// código: con un secreto conocido cualquiera podría falsificar un token de admin.
+//   - Si JWT_SECRET está en el entorno → se usa (se avisa si es muy corto).
+//   - Si NO está y es producción → el server se niega a arrancar (inseguro).
+//   - Si NO está y es desarrollo → secreto EFÍMERO aleatorio por arranque
+//     (los tokens se invalidan al reiniciar; seteá JWT_SECRET para persistirlos).
+function resolverJwtSecret() {
+  const fromEnv = process.env.JWT_SECRET;
+  if (fromEnv) {
+    if (fromEnv.length < 16) {
+      console.warn("⚠ JWT_SECRET es muy corto (<16 caracteres). Usá uno largo y aleatorio.");
+    }
+    return fromEnv;
+  }
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "JWT_SECRET no está configurado. Me niego a arrancar en producción con un " +
+      "secreto inseguro. Seteá la variable de entorno JWT_SECRET (16+ caracteres)."
+    );
+  }
+  const efimero = crypto.randomBytes(32).toString("hex");
+  console.warn(
+    "⚠ JWT_SECRET no seteado: usando un secreto EFÍMERO aleatorio (solo desarrollo). " +
+    "Los tokens se invalidan al reiniciar. Seteá JWT_SECRET en producción."
+  );
+  return efimero;
+}
+
+const JWT_SECRET = resolverJwtSecret();
 
 /**
  * Verifica que el request tenga un token JWT válido.
