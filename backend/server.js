@@ -34,20 +34,26 @@ app.use((err, req, res, next) => {
 });
 
 // ── Iniciar BD → servidor → backups ──────────────────────────────────────────
-initDatabase().then(() => {
-  app.listen(PORT, () => {
-    console.log("\n╔════════════════════════════════════════╗");
-    console.log("║         🏪 KOSKIO APP v1.3.0           ║");
-    console.log("╠════════════════════════════════════════╣");
-    console.log(`║  → http://localhost:${PORT}              ║`);
-    console.log("╚════════════════════════════════════════╝\n");
+// Solo arranca el servidor cuando se ejecuta directo (`node server.js`).
+// Si el módulo es importado (p. ej. por los tests), exporta `app` sin escuchar
+// ni disparar backups — el test controla initDatabase() y el listen.
+if (require.main === module) {
+  initDatabase().then(() => {
+    app.listen(PORT, () => {
+      console.log("\n╔════════════════════════════════════════╗");
+      console.log("║         🏪 KOSKIO APP v1.3.0           ║");
+      console.log("╠════════════════════════════════════════╣");
+      console.log(`║  → http://localhost:${PORT}              ║`);
+      console.log("╚════════════════════════════════════════╝\n");
 
-    // Iniciar backup automático DESPUÉS de que el servidor esté escuchando
-    iniciarBackupAutomatico();
+      // Iniciar backup automático DESPUÉS de que el servidor esté escuchando
+      iniciarBackupAutomatico();
+    });
+  }).catch(err => {
+    console.error("❌ Error fatal:", err);
+    process.exit(1);
   });
-}).catch(err => {
-  console.error("❌ Error fatal:", err);
-  process.exit(1);
-});
+}
 
 module.exports = app;
+module.exports.initDatabase = initDatabase;
