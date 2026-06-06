@@ -993,3 +993,94 @@ select.form-input option { background: var(--bg-elevated); }
   color: var(--text-muted);
   font-family: var(--font-mono);
 }
+
+/* ─── CONFIGURACIÓN ──────────────────────────────────────────────────────────── */
+
+.config-layout {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 20px;
+  flex: 1;
+  overflow: hidden;
+}
+
+.config-form-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.config-section {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.config-section-title {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.14em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+
+.config-ok {
+  padding: 10px 14px;
+  background: var(--accent-glow);
+  border: 1px solid rgba(0,230,118,0.3);
+  border-radius: var(--radius);
+  color: var(--accent);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+/* Panel de preview */
+.config-preview-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  position: sticky;
+  top: 0;
+  max-height: calc(100vh - 140px);
+  overflow-y: auto;
+}
+
+/* Ticket en miniatura */
+.ticket-preview {
+  background: #fff;
+  color: #000;
+  border-radius: var(--radius);
+  padding: 16px 14px;
+  font-family: 'Courier New', monospace;
+  font-size: 10px;
+  line-height: 1.6;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  border: 1px solid #ddd;
+}
+
+.tp-header  { text-align: center; margin-bottom: 8px; }
+.tp-nombre  { font-size: 14px; font-weight: bold; letter-spacing: 2px; }
+.tp-sub     { font-size: 9px; color: #666; }
+.tp-divider { border: none; border-top: 1px dashed #ccc; margin: 6px 0; }
+.tp-row     { display: flex; justify-content: space-between; font-size: 9px; color: #444; padding: 1px 0; }
+.tp-items   { width: 100%; border-collapse: collapse; margin: 4px 0; font-size: 9px; }
+.tp-items th { border-bottom: 1px solid #000; padding: 2px; text-align: left; font-size: 8px; }
+.tp-items td { padding: 3px 2px; }
+.tp-items td:last-child { text-align: right; }
+.tp-total   { display: flex; justify-content: space-between; font-size: 12px; font-weight: bold; border-top: 2px solid #000; padding-top: 4px; margin-top: 4px; }
+.tp-cae     { text-align: center; font-size: 9px; color: #555; margin: 4px 0; }
+.tp-footer  { text-align: center; font-size: 9px; color: #666; margin-top: 6px; }
+.tp-barcode {
+  margin: 6px auto 3px;
+  width: 120px; height: 24px;
+  background: repeating-linear-gradient(90deg,#000 0,#000 2px,#fff 2px,#fff 4px,#000 4px,#000 5px,#fff 5px,#fff 7px,#000 7px,#000 9px,#fff 9px,#fff 12px,#000 12px,#000 13px,#fff 13px,#fff 15px);
+}

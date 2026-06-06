@@ -2,13 +2,31 @@
 
 const API = "http://localhost:3000/api";
 
-// Configuración del negocio (el admin puede cambiar esto)
-const CONFIG_NEGOCIO = {
-  nombre:      localStorage.getItem("cfg_negocio")   || "KOSKIO APP",
-  direccion:   localStorage.getItem("cfg_direccion")  || "— Kiosco / Almacén —",
-  cuit:        localStorage.getItem("cfg_cuit")       || "",
-  footer_extra:localStorage.getItem("cfg_footer")     || "",
+// Configuración global del negocio — se carga desde la BD al iniciar
+let CONFIG_NEGOCIO = {
+  nombre:       "KOSKIO APP",
+  direccion:    "",
+  cuit:         "",
+  footer_extra: "",
 };
+
+async function cargarConfigGlobal() {
+  try {
+    const res  = await apiFetch(`${API}/config`);
+    const data = await res.json();
+    if (!res.ok || !data.success) return;
+    const c = data.data;
+    CONFIG_NEGOCIO = {
+      nombre:       c.negocio_nombre    || "KOSKIO APP",
+      direccion:    c.negocio_direccion || "",
+      cuit:         c.negocio_cuit      || "",
+      telefono:     c.negocio_telefono  || "",
+      footer_extra: c.ticket_mensaje    || "¡Gracias por su compra!",
+      punto_venta:  c.punto_venta       || "1",
+      tipo_cbte:    c.tipo_comprobante  || "11",
+    };
+  } catch (_) {}
+}
 
 const state = {
   carrito: [],
@@ -64,9 +82,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   const esAdmin = state.usuario.rol === "admin";
   // Caja e inventario: visibles para todos
   // Usuarios y backup: solo admin
-  document.getElementById("nav-caja").style.display      = "flex";
-  document.getElementById("nav-inventario").style.display = "flex";
-  document.getElementById("nav-usuarios").style.display  = esAdmin ? "flex" : "none";
+  document.getElementById("nav-caja").style.display       = "flex";
+  document.getElementById("nav-inventario").style.display  = "flex";
+  document.getElementById("nav-usuarios").style.display   = esAdmin ? "flex" : "none";
+  document.getElementById("nav-config").style.display     = esAdmin ? "flex" : "none";
+
+  // Cargar configuración global al inicio
+  await cargarConfigGlobal();
 
   const hoy = new Date().toISOString().split("T")[0];
   document.getElementById("filtro-desde").value = hoy;
@@ -87,7 +109,7 @@ function iniciarReloj() {
 // ═══ NAVEGACIÓN ═══════════════════════════════════════════════════════════════
 
 function switchView(vista) {
-  const soloAdmin = ["usuarios"];
+  const soloAdmin = ["usuarios", "config"];
   if (soloAdmin.includes(vista) && state.usuario.rol !== "admin") {
     mostrarToast("No tenés permisos para esa sección.", "error"); return;
   }
@@ -107,6 +129,7 @@ function switchView(vista) {
     if (btnNuevo) btnNuevo.style.display = state.usuario.rol === "admin" ? "" : "none";
   }
   if (vista === "usuarios")   cargarUsuarios();
+  if (vista === "config")     cargarConfig();
 }
 
 function registrarAtajos() {
@@ -924,6 +947,123 @@ async function hacerBackupManual() {
     btn.disabled    = false;
     btn.textContent = "💾 Hacer Backup Ahora";
   }
+}
+
+
+// ═══ CONFIGURACIÓN DEL NEGOCIO ════════════════════════════════════════════════
+
+async function cargarConfig() {
+  try {
+    const res  = await apiFetch(`${API}/config`);
+    const data = await res.json();
+    if (!res.ok || !data.success) throw new Error(data.mensaje);
+    const c = data.data;
+
+    document.getElementById("cfg-nombre").value         = c.negocio_nombre    || "";
+    document.getElementById("cfg-direccion").value      = c.negocio_direccion || "";
+    document.getElementById("cfg-cuit").value           = c.negocio_cuit      || "";
+    document.getElementById("cfg-telefono").value       = c.negocio_telefono  || "";
+    document.getElementById("cfg-email").value          = c.negocio_email     || "";
+    document.getElementById("cfg-ticket-mensaje").value = c.ticket_mensaje     || "¡Gracias por su compra!";
+    document.getElementById("cfg-punto-venta").value    = c.punto_venta        || "1";
+    document.getElementById("cfg-tipo-cbte").value      = c.tipo_comprobante   || "11";
+
+    actualizarPreview();
+  } catch (err) {
+    if (err.message !== "Sesión expirada")
+      mostrarToast("Error al cargar configuración.", "error");
+  }
+}
+
+async function guardarConfig() {
+  const errorEl = document.getElementById("config-error");
+  const okEl    = document.getElementById("config-ok");
+  errorEl.classList.add("hidden");
+  okEl.classList.add("hidden");
+
+  const nombre = document.getElementById("cfg-nombre").value.trim();
+  if (!nombre) {
+    errorEl.textContent = "El nombre del negocio es obligatorio.";
+    errorEl.classList.remove("hidden");
+    return;
+  }
+
+  const payload = {
+    negocio_nombre:    nombre,
+    negocio_direccion: document.getElementById("cfg-direccion").value.trim(),
+    negocio_cuit:      document.getElementById("cfg-cuit").value.trim(),
+    negocio_telefono:  document.getElementById("cfg-telefono").value.trim(),
+    negocio_email:     document.getElementById("cfg-email").value.trim(),
+    ticket_mensaje:    document.getElementById("cfg-ticket-mensaje").value.trim(),
+    punto_venta:       document.getElementById("cfg-punto-venta").value.trim(),
+    tipo_comprobante:  document.getElementById("cfg-tipo-cbte").value,
+  };
+
+  try {
+    const res  = await apiFetch(`${API}/config`, { method: "PUT", body: JSON.stringify(payload) });
+    const data = await res.json();
+    if (!res.ok || !data.success) throw new Error(data.mensaje);
+
+    // Actualizar config global en memoria
+    await cargarConfigGlobal();
+    okEl.classList.remove("hidden");
+    mostrarToast("Configuración guardada.", "success");
+    setTimeout(() => okEl.classList.add("hidden"), 4000);
+  } catch (err) {
+    if (err.message !== "Sesión expirada") {
+      errorEl.textContent = `Error: ${err.message}`;
+      errorEl.classList.remove("hidden");
+    }
+  }
+}
+
+function actualizarPreview() {
+  const nombre   = document.getElementById("cfg-nombre")?.value         || "KOSKIO APP";
+  const dir      = document.getElementById("cfg-direccion")?.value      || "";
+  const cuit     = document.getElementById("cfg-cuit")?.value           || "";
+  const tel      = document.getElementById("cfg-telefono")?.value       || "";
+  const mensaje  = document.getElementById("cfg-ticket-mensaje")?.value || "¡Gracias por su compra!";
+  const ptoVta   = document.getElementById("cfg-punto-venta")?.value    || "1";
+  const tipoCbte = document.getElementById("cfg-tipo-cbte");
+  const tipoNombre = tipoCbte ? tipoCbte.options[tipoCbte.selectedIndex]?.text || "Factura C" : "Factura C";
+
+  const preview = document.getElementById("ticket-preview");
+  if (!preview) return;
+
+  preview.innerHTML = `
+    <div class="tp-header">
+      <div class="tp-nombre">${escapeHtml(nombre)}</div>
+      ${dir  ? `<div class="tp-sub">${escapeHtml(dir)}</div>`  : ""}
+      ${cuit ? `<div class="tp-sub">CUIT: ${escapeHtml(cuit)}</div>` : ""}
+      ${tel  ? `<div class="tp-sub">Tel: ${escapeHtml(tel)}</div>`   : ""}
+    </div>
+    <hr class="tp-divider" />
+    <div class="tp-row"><span>${tipoNombre}</span><span>Pto.Vta: ${String(ptoVta).padStart(4,"0")}</span></div>
+    <div class="tp-row"><span>Comp. Nro:</span><span>00000001</span></div>
+    <div class="tp-row"><span>Fecha:</span><span>${new Date().toLocaleDateString("es-AR")}</span></div>
+    <div class="tp-row"><span>Cajero:</span><span>${escapeHtml(state.usuario?.nombre || "Cajero")}</span></div>
+    <hr class="tp-divider" />
+    <table class="tp-items">
+      <thead><tr><th>Descripción</th><th>Cant</th><th>P.Unit</th><th>Subtotal</th></tr></thead>
+      <tbody>
+        <tr><td>Coca Cola 500ml</td><td>2</td><td>$850</td><td>$1.700</td></tr>
+        <tr><td>Galletitas Oreo</td><td>1</td><td>$950</td><td>$950</td></tr>
+      </tbody>
+    </table>
+    <div class="tp-total"><span>TOTAL</span><span>$2.650,00</span></div>
+    <div class="tp-row" style="margin-top:4px"><span>Efectivo</span><span>$3.000,00</span></div>
+    <div class="tp-row" style="color:#777"><span>Vuelto</span><span>$350,00</span></div>
+    <hr class="tp-divider" />
+    <div class="tp-cae">
+      <div>CAE Nro: 74867428040000</div>
+      <div>Vto. CAE: 15/06/2026</div>
+    </div>
+    <div class="tp-barcode"></div>
+    <hr class="tp-divider" />
+    <div class="tp-footer">
+      <div style="font-weight:bold">${escapeHtml(mensaje)}</div>
+      <div>Conserve su comprobante</div>
+    </div>`;
 }
 
 // ═══ UTILIDADES ═══════════════════════════════════════════════════════════════

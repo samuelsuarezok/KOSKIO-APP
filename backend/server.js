@@ -1,10 +1,10 @@
-// server.js — KOSKIO APP v1.3.0
+// server.js — KOSKIO APP v1.4.0
 
 const express  = require("express");
 const cors     = require("cors");
 const path     = require("path");
-const { initDatabase }          = require("./db/database");
-const { verificarToken }        = require("./middleware/auth");
+const { initDatabase }            = require("./db/database");
+const { verificarToken }          = require("./middleware/auth");
 const { iniciarBackupAutomatico } = require("./services/backupService");
 
 const PORT = process.env.PORT || 3000;
@@ -15,10 +15,11 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "..", "frontend")));
 
-// ── Rutas públicas ────────────────────────────────────────────────────────────
-app.use("/api/auth", require("./routes/auth"));
+// Rutas públicas
+app.use("/api/auth",   require("./routes/auth"));
 
-// ── Rutas protegidas ──────────────────────────────────────────────────────────
+// Rutas protegidas
+app.use("/api/config",    verificarToken, require("./routes/config"));
 app.use("/api/productos", verificarToken, require("./routes/productos"));
 app.use("/api/ventas",    verificarToken, require("./routes/ventas"));
 app.use("/api/caja",      verificarToken, require("./routes/caja"));
@@ -33,27 +34,15 @@ app.use((err, req, res, next) => {
   res.status(500).json({ success: false, mensaje: "Error interno del servidor" });
 });
 
-// ── Iniciar BD → servidor → backups ──────────────────────────────────────────
-// Solo arranca el servidor cuando se ejecuta directo (`node server.js`).
-// Si el módulo es importado (p. ej. por los tests), exporta `app` sin escuchar
-// ni disparar backups — el test controla initDatabase() y el listen.
-if (require.main === module) {
-  initDatabase().then(() => {
-    app.listen(PORT, () => {
-      console.log("\n╔════════════════════════════════════════╗");
-      console.log("║         🏪 KOSKIO APP v1.3.0           ║");
-      console.log("╠════════════════════════════════════════╣");
-      console.log(`║  → http://localhost:${PORT}              ║`);
-      console.log("╚════════════════════════════════════════╝\n");
-
-      // Iniciar backup automático DESPUÉS de que el servidor esté escuchando
-      iniciarBackupAutomatico();
-    });
-  }).catch(err => {
-    console.error("❌ Error fatal:", err);
-    process.exit(1);
+initDatabase().then(() => {
+  app.listen(PORT, () => {
+    console.log("\n╔════════════════════════════════════════╗");
+    console.log("║         🏪 KOSKIO APP v1.4.0           ║");
+    console.log("╠════════════════════════════════════════╣");
+    console.log(`║  → http://localhost:${PORT}              ║`);
+    console.log("╚════════════════════════════════════════╝\n");
+    iniciarBackupAutomatico();
   });
-}
+}).catch(err => { console.error("❌ Error fatal:", err); process.exit(1); });
 
 module.exports = app;
-module.exports.initDatabase = initDatabase;
