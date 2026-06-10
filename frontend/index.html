@@ -16,6 +16,7 @@
     <div class="topbar-brand">
       <span class="brand-icon">⬡</span>
       <span class="brand-name">KOSKIO <span class="brand-accent">APP</span></span>
+      <span class="brand-tenant" id="header-tenant">—</span>
     </div>
     <nav class="topbar-nav">
       <button class="nav-btn active" data-view="pos" onclick="switchView('pos')">
@@ -278,10 +279,20 @@
           <button class="btn-nuevo" id="btn-nuevo-producto" onclick="abrirModalProducto()">+ Nuevo Producto</button>
         </div>
       </div>
+      <!-- Alertas de stock bajo -->
+      <div id="alerta-stock-panel" class="alerta-stock-panel hidden">
+        <div class="alerta-stock-header">
+          <span class="alerta-stock-icon">⚠</span>
+          <span class="alerta-stock-titulo">Productos con stock bajo</span>
+          <button class="alerta-stock-cerrar" onclick="cerrarAlertaStock()">✕</button>
+        </div>
+        <div id="alerta-stock-lista" class="alerta-stock-lista"></div>
+      </div>
+
       <div class="inv-table-wrapper">
         <table class="inv-table">
-          <thead><tr><th>ID</th><th>Código de Barras</th><th>Nombre</th><th>Precio</th><th>Stock</th><th>Actualizado</th><th>Acciones</th></tr></thead>
-          <tbody id="inv-body"><tr><td colspan="7" class="loading-row">Cargando productos...</td></tr></tbody>
+          <thead><tr><th>ID</th><th>Código de Barras</th><th>Nombre</th><th>Precio</th><th>Stock</th><th>Stock Mín.</th><th>Actualizado</th><th>Acciones</th></tr></thead>
+          <tbody id="inv-body"><tr><td colspan="8" class="loading-row">Cargando productos...</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -336,6 +347,28 @@
             <span id="modal-vuelto" class="vuelto-amount neutral">—</span>
           </div>
           <div id="cobro-error" class="cobro-error hidden"></div>
+        </div>
+
+        <!-- PASO 1b: Medio de pago (debajo del efectivo) -->
+        <div id="cobro-medio-pago" class="medio-pago-selector">
+          <div class="medio-pago-label">Medio de pago</div>
+          <div class="medio-pago-btns">
+            <button class="medio-btn active" data-medio="efectivo" onclick="seleccionarMedio('efectivo')">
+              <span class="medio-icon">💵</span><span>Efectivo</span>
+            </button>
+            <button class="medio-btn" data-medio="debito" onclick="seleccionarMedio('debito')">
+              <span class="medio-icon">💳</span><span>Débito</span>
+            </button>
+            <button class="medio-btn" data-medio="credito" onclick="seleccionarMedio('credito')">
+              <span class="medio-icon">💳</span><span>Crédito</span>
+            </button>
+            <button class="medio-btn" data-medio="transferencia" onclick="seleccionarMedio('transferencia')">
+              <span class="medio-icon">🏦</span><span>Transfer.</span>
+            </button>
+            <button class="medio-btn" data-medio="qr" onclick="seleccionarMedio('qr')">
+              <span class="medio-icon">📱</span><span>QR</span>
+            </button>
+          </div>
         </div>
 
         <!-- PASO 2: ¿Facturar? -->
@@ -393,7 +426,11 @@
         <div class="form-group"><label>Nombre del Producto *</label><input type="text" id="prod-nombre" class="form-input" placeholder="Ej: Coca Cola 500ml" /></div>
         <div class="form-row">
           <div class="form-group"><label>Precio ($) *</label><input type="number" id="prod-precio" class="form-input" placeholder="0.00" min="0" step="0.01" /></div>
-          <div class="form-group"><label>Stock</label><input type="number" id="prod-stock" class="form-input" placeholder="0" min="0" /></div>
+          <div class="form-group"><label>Stock actual</label><input type="number" id="prod-stock" class="form-input" placeholder="0" min="0" /></div>
+        </div>
+        <div class="form-group">
+          <label>Stock mínimo (alerta cuando baje de este número)</label>
+          <input type="number" id="prod-stock-min" class="form-input" placeholder="5" min="0" />
         </div>
         <div id="prod-error" class="cobro-error hidden"></div>
       </div>
@@ -498,6 +535,14 @@
             <div class="config-section-title">🧾 Configuración del Ticket</div>
 
             <div class="form-group">
+              <label>Umbral global de stock mínimo (unidades)</label>
+              <input type="number" id="cfg-stock-minimo" class="form-input"
+                placeholder="5" min="0" oninput="actualizarPreview()" />
+              <small style="color:var(--text-muted);font-size:0.75rem;margin-top:4px;display:block">
+                Se usa como valor por defecto al crear nuevos productos
+              </small>
+            </div>
+            <div class="form-group">
               <label>Mensaje al pie del ticket</label>
               <input type="text" id="cfg-ticket-mensaje" class="form-input"
                 placeholder="Ej: ¡Gracias por su compra!" oninput="actualizarPreview()" />
@@ -535,6 +580,13 @@
       </div>
     </div>
   </main>
+
+  <!-- Panel de alerta de stock bajo en POS -->
+  <div id="stock-alert-banner" class="stock-alert-banner hidden" onclick="switchView('inventario')">
+    <span class="stock-alert-icon">⚠</span>
+    <span id="stock-alert-text">Productos con stock bajo</span>
+    <span class="stock-alert-ver">Ver inventario →</span>
+  </div>
 
   <div id="toast-container" class="toast-container"></div>
   <script src="js/app.js"></script>

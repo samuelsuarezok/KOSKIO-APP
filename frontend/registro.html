@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KOSKIO APP — Registrar Negocio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+  <style>
+    body {
+      display: flex; align-items: center; justify-content: center;
+      min-height: 100vh; background: var(--bg-base);
+      background-image:
+        radial-gradient(circle at 50% 50%, rgba(0,230,118,0.03) 0%, transparent 70%),
+        linear-gradient(var(--border) 1px, transparent 1px),
+        linear-gradient(90deg, var(--border) 1px, transparent 1px);
+      background-size: 100% 100%, 40px 40px, 40px 40px;
+    }
+    .reg-wrapper { width: 100%; max-width: 460px; padding: 24px; }
+    .reg-brand { text-align: center; margin-bottom: 30px; }
+    .reg-brand-icon { font-size: 2.4rem; color: var(--accent); display: block; margin-bottom: 10px; filter: drop-shadow(0 0 20px var(--accent)); }
+    .reg-brand-name { font-family: var(--font-mono); font-size: 1.4rem; font-weight: 700; }
+    .reg-brand-name span { color: var(--accent); }
+    .reg-card { background: var(--bg-surface); border: 1px solid var(--border-light); border-radius: var(--radius-lg); padding: 28px; box-shadow: 0 24px 64px rgba(0,0,0,0.4); }
+    .reg-title { font-size: 1.05rem; font-weight: 700; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+    .reg-title::before { content: ''; display: inline-block; width: 3px; height: 1em; background: var(--accent); border-radius: 2px; }
+    .reg-sub { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 20px; }
+    .reg-group { margin-bottom: 14px; }
+    .reg-group label { display: block; font-family: var(--font-mono); font-size: 0.7rem; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 5px; text-transform: uppercase; }
+    .reg-input { width: 100%; padding: 11px 14px; background: var(--bg-elevated); border: 1px solid var(--border-light); border-radius: var(--radius); color: var(--text-primary); font-family: var(--font-mono); font-size: 0.92rem; outline: none; transition: border-color 0.2s, box-shadow 0.2s; }
+    .reg-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+    .reg-input::placeholder { color: var(--text-muted); }
+    .reg-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .reg-section { font-family: var(--font-mono); font-size: 0.65rem; letter-spacing: 0.14em; color: var(--text-muted); text-transform: uppercase; padding-bottom: 8px; border-bottom: 1px solid var(--border); margin: 16px 0 12px; }
+    .reg-btn { width: 100%; padding: 14px; margin-top: 8px; background: var(--accent); color: #000; border: none; border-radius: var(--radius); font-family: var(--font-sans); font-size: 0.95rem; font-weight: 800; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px; }
+    .reg-btn:hover:not(:disabled) { background: var(--accent-dim); box-shadow: 0 6px 20px var(--accent-glow); transform: translateY(-1px); }
+    .reg-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+    .reg-error { margin-top: 12px; padding: 10px 14px; background: var(--danger-glow); border: 1px solid var(--danger); border-radius: var(--radius); color: var(--danger); font-size: 0.82rem; text-align: center; display: none; }
+    .reg-error.visible { display: block; }
+    .reg-footer { margin-top: 20px; text-align: center; font-size: 0.8rem; color: var(--text-muted); }
+    .reg-footer a { color: var(--accent); text-decoration: none; font-weight: 600; }
+
+    /* Pantalla de éxito */
+    .reg-success { display: none; text-align: center; padding: 20px 0; }
+    .reg-success.visible { display: block; }
+    .reg-success-icon { font-size: 3rem; margin-bottom: 16px; }
+    .reg-success-title { font-size: 1.2rem; font-weight: 800; margin-bottom: 8px; }
+    .reg-success-sub { font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 20px; }
+    .reg-codigo-display { background: var(--bg-elevated); border: 2px solid var(--accent); border-radius: var(--radius-lg); padding: 20px; margin: 16px 0; }
+    .reg-codigo-label { font-family: var(--font-mono); font-size: 0.7rem; color: var(--text-muted); letter-spacing: 0.12em; margin-bottom: 6px; }
+    .reg-codigo-value { font-family: var(--font-mono); font-size: 2rem; font-weight: 700; color: var(--accent); letter-spacing: 0.2em; }
+    .reg-codigo-warn { font-size: 0.78rem; color: var(--amber); margin-top: 8px; font-weight: 600; }
+    .reg-success-details { text-align: left; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; margin: 16px 0; font-size: 0.82rem; }
+    .reg-success-details div { display: flex; justify-content: space-between; padding: 4px 0; color: var(--text-secondary); }
+    .reg-success-details .val { color: var(--text-primary); font-weight: 600; font-family: var(--font-mono); }
+    .reg-btn-login { width: 100%; padding: 14px; background: var(--accent); color: #000; border: none; border-radius: var(--radius); font-family: var(--font-sans); font-size: 0.95rem; font-weight: 800; cursor: pointer; text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 8px; }
+    .reg-btn-login:hover { background: var(--accent-dim); }
+  </style>
+</head>
+<body>
+  <div class="reg-wrapper">
+    <div class="reg-brand">
+      <span class="reg-brand-icon">⬡</span>
+      <div class="reg-brand-name">KOSKIO <span>APP</span></div>
+    </div>
+
+    <div class="reg-card">
+
+      <!-- FORMULARIO -->
+      <div id="reg-form">
+        <div class="reg-title">Registrar tu negocio</div>
+        <div class="reg-sub">Creá tu cuenta en menos de 1 minuto. 30 días gratis.</div>
+
+        <div class="reg-section">🏪 Datos del negocio</div>
+
+        <div class="reg-group">
+          <label>Nombre del negocio *</label>
+          <input type="text" id="reg-negocio" class="reg-input"
+            placeholder="Ej: Almacén Don Juan" autofocus />
+        </div>
+        <div class="reg-row">
+          <div class="reg-group">
+            <label>Email de contacto</label>
+            <input type="email" id="reg-email" class="reg-input" placeholder="correo@mail.com" />
+          </div>
+          <div class="reg-group">
+            <label>Teléfono</label>
+            <input type="text" id="reg-telefono" class="reg-input" placeholder="(011) 1234-5678" />
+          </div>
+        </div>
+
+        <div class="reg-section">👤 Tu cuenta de administrador</div>
+
+        <div class="reg-group">
+          <label>Tu nombre completo *</label>
+          <input type="text" id="reg-admin-nombre" class="reg-input" placeholder="Ej: Juan Pérez" />
+        </div>
+        <div class="reg-row">
+          <div class="reg-group">
+            <label>Nombre de usuario *</label>
+            <input type="text" id="reg-admin-usuario" class="reg-input" placeholder="Ej: juan" />
+          </div>
+          <div class="reg-group">
+            <label>Contraseña * (mín. 8)</label>
+            <input type="password" id="reg-admin-password" class="reg-input" placeholder="••••••••" />
+          </div>
+        </div>
+
+        <button class="reg-btn" id="btn-registrar" onclick="registrar()">
+          <span id="btn-reg-text">Crear mi negocio gratis</span>
+        </button>
+        <div class="reg-error" id="reg-error"></div>
+      </div>
+
+      <!-- ÉXITO -->
+      <div id="reg-success" class="reg-success">
+        <div class="reg-success-icon">🎉</div>
+        <div class="reg-success-title">¡Negocio creado!</div>
+        <div class="reg-success-sub">Guardá tu código de negocio. Lo necesitás para iniciar sesión.</div>
+
+        <div class="reg-codigo-display">
+          <div class="reg-codigo-label">TU CÓDIGO DE NEGOCIO</div>
+          <div class="reg-codigo-value" id="reg-result-codigo">—</div>
+          <div class="reg-codigo-warn">⚠ Anotá este código, es tu clave de acceso al sistema.</div>
+        </div>
+
+        <div class="reg-success-details">
+          <div><span>Negocio</span><span class="val" id="reg-result-nombre">—</span></div>
+          <div><span>Usuario admin</span><span class="val" id="reg-result-usuario">—</span></div>
+          <div><span>Plan</span><span class="val" id="reg-result-plan">—</span></div>
+          <div><span>Válido hasta</span><span class="val" id="reg-result-vto">—</span></div>
+        </div>
+
+        <a href="/login.html" class="reg-btn-login">Ir a iniciar sesión →</a>
+      </div>
+
+    </div>
+
+    <div class="reg-footer">
+      ¿Ya tenés cuenta? <a href="/login.html">Iniciar sesión</a>
+    </div>
+  </div>
+
+  <script>
+    const API = window.location.origin + "/api";
+
+    async function registrar() {
+      const negocio  = document.getElementById("reg-negocio").value.trim();
+      const email    = document.getElementById("reg-email").value.trim();
+      const telefono = document.getElementById("reg-telefono").value.trim();
+      const nombre   = document.getElementById("reg-admin-nombre").value.trim();
+      const usuario  = document.getElementById("reg-admin-usuario").value.trim();
+      const password = document.getElementById("reg-admin-password").value;
+      const btn      = document.getElementById("btn-registrar");
+      const btnText  = document.getElementById("btn-reg-text");
+      const errorEl  = document.getElementById("reg-error");
+
+      if (!negocio || !nombre || !usuario || !password) {
+        mostrarError("Completá los campos obligatorios (*).");
+        return;
+      }
+      if (password.length < 8) {
+        mostrarError("La contraseña debe tener al menos 8 caracteres.");
+        return;
+      }
+
+      btn.disabled = true;
+      btnText.innerHTML = '<span class="spinner" style="border-color:rgba(0,0,0,0.3);border-top-color:#000"></span> Creando...';
+      errorEl.classList.remove("visible");
+
+      try {
+        const res = await fetch(`${API}/auth/registro`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            negocio_nombre: negocio,
+            admin_nombre:   nombre,
+            admin_usuario:  usuario,
+            admin_password: password,
+            email, telefono,
+          }),
+        });
+        const data = await res.json();
+
+        if (!res.ok || !data.success) {
+          mostrarError(data.mensaje || "Error al registrar.");
+          return;
+        }
+
+        // Mostrar pantalla de éxito
+        document.getElementById("reg-form").style.display    = "none";
+        document.getElementById("reg-success").classList.add("visible");
+        document.getElementById("reg-result-codigo").textContent  = data.data.codigo;
+        document.getElementById("reg-result-nombre").textContent  = data.data.nombre;
+        document.getElementById("reg-result-usuario").textContent = data.data.admin_usuario;
+        document.getElementById("reg-result-plan").textContent    = data.data.plan;
+        document.getElementById("reg-result-vto").textContent     = data.data.fecha_vencimiento;
+
+        // Guardar código para pre-llenar el login
+        localStorage.setItem("pos_last_codigo", data.data.codigo);
+
+      } catch (err) {
+        mostrarError("No se pudo conectar con el servidor.");
+      } finally {
+        btn.disabled = false;
+        btnText.textContent = "Crear mi negocio gratis";
+      }
+    }
+
+    function mostrarError(msg) {
+      const el = document.getElementById("reg-error");
+      el.textContent = msg;
+      el.classList.add("visible");
+    }
+  </script>
+</body>
+</html>

@@ -2,13 +2,13 @@
 
 const express = require("express");
 const router  = express.Router();
-const { getDb }      = require("../db/database");
+
 const { soloAdmin }  = require("../middleware/auth");
 
 // GET /api/caja/resumen — Resumen del día (admin y cajero)
 router.get("/resumen", (req, res) => {
   try {
-    const db    = getDb();
+    const db = req.tenantDb;
     const fecha = req.query.fecha || new Date().toISOString().split("T")[0];
     const esAdmin = req.usuario.rol === "admin";
 
@@ -82,7 +82,7 @@ router.get("/resumen", (req, res) => {
 // POST /api/caja/cerrar — Registrar cierre (admin y cajero)
 router.post("/cerrar", (req, res) => {
   try {
-    const db    = getDb();
+    const db = req.tenantDb;
     const fecha = req.query.fecha || new Date().toISOString().split("T")[0];
     const { notas } = req.body;
     const esAdmin   = req.usuario.rol === "admin";
@@ -123,7 +123,7 @@ router.post("/cerrar", (req, res) => {
 // GET /api/caja/historial — Solo admin
 router.get("/historial", soloAdmin, (req, res) => {
   try {
-    const db     = getDb();
+    const db = req.tenantDb;
     const limite = parseInt(req.query.limite) || 30;
     const cierres = db.all(`
       SELECT c.*, u.nombre AS admin_nombre

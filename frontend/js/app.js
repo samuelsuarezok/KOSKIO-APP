@@ -1,6 +1,6 @@
 // app.js — KOSKIO APP v1.3.0 — con impresión de ticket
 
-const API = "http://localhost:3000/api";
+const API = window.location.origin + "/api";
 
 // Configuración global del negocio — se carga desde la BD al iniciar
 let CONFIG_NEGOCIO = {
@@ -35,6 +35,7 @@ const state = {
   usuario: null,
   token: null,
   ventasPagina: 1,
+  medioPago: "efectivo",   // efectivo | debito | credito | transferencia | qr
 };
 
 // ═══ AUTENTICACIÓN ════════════════════════════════════════════════════════════
@@ -78,6 +79,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   document.getElementById("header-nombre").textContent = state.usuario.nombre;
   document.getElementById("header-rol").textContent    = state.usuario.rol.toUpperCase();
+  const tenantEl = document.getElementById("header-tenant");
+  if (tenantEl) tenantEl.textContent = state.usuario.tenant_nombre || state.usuario.tenant_codigo || "—";
 
   const esAdmin = state.usuario.rol === "admin";
   // Caja e inventario: visibles para todos
@@ -98,6 +101,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   iniciarReloj();
   registrarAtajos();
   document.getElementById("barcode-input").focus();
+
+  // Verificar stock bajo al iniciar
+  verificarStockBajo();
 });
 
 function iniciarReloj() {
@@ -124,6 +130,7 @@ function switchView(vista) {
   if (vista === "caja")       { cargarCaja(); cargarBackups(); }
   if (vista === "inventario") {
     cargarInventario();
+    mostrarAlertasStockEnInventario();
     // Mostrar/ocultar botón nuevo producto según rol
     const btnNuevo = document.getElementById("btn-nuevo-producto");
     if (btnNuevo) btnNuevo.style.display = state.usuario.rol === "admin" ? "" : "none";
@@ -224,13 +231,37 @@ function abrirModalCobro() {
   document.getElementById("modal-vuelto").className  = "vuelto-amount neutral";
   document.getElementById("btn-confirmar").disabled  = true;
   document.getElementById("cobro-error").classList.add("hidden");
-  // Volver siempre al paso 1
+  // Volver siempre al paso 1 y resetear medio de pago
   document.getElementById("cobro-paso-1").classList.remove("hidden");
   document.getElementById("cobro-paso-2").classList.add("hidden");
   document.getElementById("btn-confirmar-text").textContent = "Continuar";
   document.getElementById("btn-confirmar").onclick = irAPasoFactura;
+  seleccionarMedio("efectivo");
   document.getElementById("modal-cobro").classList.add("open");
   setTimeout(() => document.getElementById("input-efectivo").focus(), 100);
+}
+
+function seleccionarMedio(medio) {
+  state.medioPago = medio;
+  document.querySelectorAll(".medio-btn").forEach(b => {
+    b.classList.toggle("active", b.dataset.medio === medio);
+  });
+  // Mostrar/ocultar sección de efectivo y vuelto según medio
+  const esEfectivo = medio === "efectivo";
+  const inputGroup = document.querySelector(".cobro-input-group");
+  const billetes   = document.querySelector(".billetes-rapidos");
+  const vueltoDisp = document.querySelector(".vuelto-display");
+  if (inputGroup) inputGroup.style.display = esEfectivo ? "" : "none";
+  if (billetes)   billetes.style.display   = esEfectivo ? "" : "none";
+  if (vueltoDisp) vueltoDisp.style.display = esEfectivo ? "" : "none";
+  // Si no es efectivo, habilitar directo el botón continuar
+  const btn = document.getElementById("btn-confirmar");
+  if (!esEfectivo) {
+    btn.disabled = false;
+  } else {
+    // Re-evaluar si hay efectivo ingresado
+    calcularVuelto();
+  }
 }
 
 function irAPasoFactura() {
@@ -280,8 +311,9 @@ function handleCobroKey(e) {
 }
 
 async function procesarVenta(generar_factura) {
-  const efectivo = parseFloat(document.getElementById("input-efectivo").value) || 0;
-  const vuelto   = efectivo - state.total;
+  const efectivo        = parseFloat(document.getElementById("input-efectivo").value) || 0;
+  const vueltoCalculado = state.medioPago === "efectivo" ? efectivo - state.total : 0;
+  const vuelto          = vueltoCalculado;
 
   // Deshabilitar ambos botones del paso 2 mientras procesa
   document.querySelectorAll(".factura-opcion").forEach(b => {
@@ -303,6 +335,7 @@ async function procesarVenta(generar_factura) {
       body: JSON.stringify({
         items: state.carrito.map(i => ({ producto_id: i.producto_id, cantidad: i.cantidad, precio_unit: i.precio_unit, subtotal: i.subtotal })),
         total: state.total, efectivo, vuelto,
+        medio_pago: state.medioPago,
         generar_factura,
       }),
     });
@@ -314,8 +347,13 @@ async function procesarVenta(generar_factura) {
     // Restaurar footer y cerrar modal
     document.getElementById("cobro-footer").style.display = "";
     document.getElementById("modal-cobro").classList.remove("open");
-    mostrarComprobante(data.data, efectivo, vuelto, itemsVendidos);
+    mostrarComprobante(data.data, efectivo, vueltoCalculado, itemsVendidos);
     limpiarCarrito();
+
+    // Mostrar alertas de stock bajo si las hay
+    if (data.alertas_stock && data.alertas_stock.length > 0) {
+      setTimeout(() => mostrarAlertasStockVenta(data.alertas_stock), 800);
+    }
 
   } catch (err) {
     // Restaurar botones si hay error
@@ -396,6 +434,7 @@ function mostrarComprobante(venta, efectivo, vuelto, items) {
     <div class="comprobante-row"><span>Fecha</span><span class="val">${new Date().toLocaleString("es-AR")}</span></div>
     <div class="comprobante-row"><span>Cajero</span><span class="val">${escapeHtml(state.usuario.nombre)}</span></div>
     <div class="comprobante-row"><span>Venta ID</span><span class="val">#${venta.venta_id}</span></div>
+    <div class="comprobante-row"><span>Medio de pago</span><span class="val">${_labelMedioPago(venta.medio_pago)}</span></div>
     <div class="comprobante-row"><span>Factura</span><span class="val" style="color:${venta.facturada?"var(--accent)":"var(--text-muted)"}">${venta.facturada?"✅ Con CAE":"— Sin factura"}</span></div>
     <div class="comprobante-row"><span>Efectivo</span><span class="val">${formatPeso(efectivo)}</span></div>
     <div class="comprobante-row"><span>Vuelto</span><span class="val">${formatPeso(vuelto)}</span></div>
@@ -467,8 +506,8 @@ function renderizarVentas(ventas, paginacion, resumen) {
       <td class="td-vuelto">${formatPeso(v.vuelto)}</td>
       <td class="td-cae" title="${v.cae||''}">${v.cae ? v.cae.slice(0,6)+"..." : "—"}</td>
       <td>
-        <span class="estado-venta ${v.estado==="completada"?"estado-completada":"estado-procesando"}">${v.estado}</span>
-        <span class="badge-facturada ${v.facturada?"badge-con-factura":"badge-sin-factura"}">${v.facturada?"facturada":"sin factura"}</span>
+        <span class="estado-venta ${v.estado==="completada"?"estado-completada":"estado-procesando"}">${v.estado}</span><br>
+        <span class="badge-medio badge-${v.medio_pago||'efectivo'}">${_labelMedioPago(v.medio_pago)}</span>
       </td>
       <td>
         <div class="action-btns">
@@ -760,9 +799,12 @@ function renderizarInventario(productos) {
     const sc = p.stock === 0 ? "stock-cero" : p.stock <= 5 ? "stock-bajo" : "stock-ok";
     const esAdmin = state.usuario.rol === "admin";
     return `<tr>
-      <td class="td-id">${p.id}</td><td class="td-codigo">${escapeHtml(p.codigo_barras)}</td>
-      <td class="td-nombre">${escapeHtml(p.nombre)}</td><td class="td-precio">${formatPeso(p.precio)}</td>
+      <td class="td-id">${p.id}</td>
+      <td class="td-codigo">${escapeHtml(p.codigo_barras)}</td>
+      <td class="td-nombre">${escapeHtml(p.nombre)}</td>
+      <td class="td-precio">${formatPeso(p.precio)}</td>
       <td class="td-stock ${sc}">${p.stock}</td>
+      <td class="td-stock" style="color:var(--text-muted)">${p.stock_minimo ?? 5}</td>
       <td class="td-fecha">${p.actualizado_en?p.actualizado_en.split(" ")[0]:"—"}</td>
       <td>${esAdmin ? `<div class="action-btns">
         <button class="btn-edit" onclick="abrirModalProducto(${p.id})">Editar</button>
@@ -775,11 +817,18 @@ function abrirModalProducto(id = null) {
   document.getElementById("modal-producto-title").textContent = id ? "Editar Producto" : "Nuevo Producto";
   document.getElementById("prod-btn-text").textContent = id ? "Guardar Cambios" : "Guardar Producto";
   document.getElementById("prod-error").classList.add("hidden");
-  ["prod-id","prod-codigo","prod-nombre","prod-precio","prod-stock"].forEach(i => document.getElementById(i).value = "");
+  ["prod-id","prod-codigo","prod-nombre","prod-precio","prod-stock","prod-stock-min"].forEach(i => {
+    const el = document.getElementById(i); if (el) el.value = "";
+  });
   if (id) { const p = todosLosProductos.find(p => p.id === id); if (!p) return;
-    document.getElementById("prod-id").value = p.id; document.getElementById("prod-codigo").value = p.codigo_barras;
-    document.getElementById("prod-nombre").value = p.nombre; document.getElementById("prod-precio").value = p.precio;
-    document.getElementById("prod-stock").value = p.stock; }
+    document.getElementById("prod-id").value       = p.id;
+    document.getElementById("prod-codigo").value   = p.codigo_barras;
+    document.getElementById("prod-nombre").value   = p.nombre;
+    document.getElementById("prod-precio").value   = p.precio;
+    document.getElementById("prod-stock").value    = p.stock;
+    const smEl = document.getElementById("prod-stock-min");
+    if (smEl) smEl.value = p.stock_minimo ?? 5;
+  }
   document.getElementById("modal-producto").classList.add("open");
   setTimeout(() => document.getElementById("prod-codigo").focus(), 100);
 }
@@ -791,11 +840,13 @@ async function guardarProducto() {
   const codigo_barras = document.getElementById("prod-codigo").value.trim();
   const nombre = document.getElementById("prod-nombre").value.trim();
   const precio = parseFloat(document.getElementById("prod-precio").value);
-  const stock  = parseInt(document.getElementById("prod-stock").value) || 0;
+  const stock      = parseInt(document.getElementById("prod-stock").value) || 0;
+  const stockMinEl = document.getElementById("prod-stock-min");
+  const stock_minimo = stockMinEl ? (parseInt(stockMinEl.value) || 5) : 5;
   const errorEl = document.getElementById("prod-error");
   if (!codigo_barras || !nombre || isNaN(precio)) { errorEl.textContent = "Completá los campos obligatorios."; errorEl.classList.remove("hidden"); return; }
   try {
-    const res = await apiFetch(id ? `${API}/productos/${id}` : `${API}/productos`, { method: id?"PUT":"POST", body: JSON.stringify({codigo_barras,nombre,precio,stock}) });
+    const res = await apiFetch(id ? `${API}/productos/${id}` : `${API}/productos`, { method: id?"PUT":"POST", body: JSON.stringify({codigo_barras,nombre,precio,stock,stock_minimo}) });
     const data = await res.json();
     if (!res.ok||!data.success) { errorEl.textContent=data.mensaje||"Error."; errorEl.classList.remove("hidden"); return; }
     cerrarModalProducto(); mostrarToast(id?"Producto actualizado.":"Producto creado.","success"); cargarInventario();
@@ -964,9 +1015,11 @@ async function cargarConfig() {
     document.getElementById("cfg-cuit").value           = c.negocio_cuit      || "";
     document.getElementById("cfg-telefono").value       = c.negocio_telefono  || "";
     document.getElementById("cfg-email").value          = c.negocio_email     || "";
-    document.getElementById("cfg-ticket-mensaje").value = c.ticket_mensaje     || "¡Gracias por su compra!";
-    document.getElementById("cfg-punto-venta").value    = c.punto_venta        || "1";
-    document.getElementById("cfg-tipo-cbte").value      = c.tipo_comprobante   || "11";
+    document.getElementById("cfg-ticket-mensaje").value = c.ticket_mensaje      || "¡Gracias por su compra!";
+    document.getElementById("cfg-punto-venta").value    = c.punto_venta         || "1";
+    document.getElementById("cfg-tipo-cbte").value      = c.tipo_comprobante    || "11";
+    const cfgStockMin = document.getElementById("cfg-stock-minimo");
+    if (cfgStockMin) cfgStockMin.value = c.stock_minimo_alerta || "5";
 
     actualizarPreview();
   } catch (err) {
@@ -994,9 +1047,10 @@ async function guardarConfig() {
     negocio_cuit:      document.getElementById("cfg-cuit").value.trim(),
     negocio_telefono:  document.getElementById("cfg-telefono").value.trim(),
     negocio_email:     document.getElementById("cfg-email").value.trim(),
-    ticket_mensaje:    document.getElementById("cfg-ticket-mensaje").value.trim(),
-    punto_venta:       document.getElementById("cfg-punto-venta").value.trim(),
-    tipo_comprobante:  document.getElementById("cfg-tipo-cbte").value,
+    ticket_mensaje:       document.getElementById("cfg-ticket-mensaje").value.trim(),
+    punto_venta:          document.getElementById("cfg-punto-venta").value.trim(),
+    tipo_comprobante:     document.getElementById("cfg-tipo-cbte").value,
+    stock_minimo_alerta:  document.getElementById("cfg-stock-minimo")?.value.trim() || "5",
   };
 
   try {
@@ -1064,6 +1118,90 @@ function actualizarPreview() {
       <div style="font-weight:bold">${escapeHtml(mensaje)}</div>
       <div>Conserve su comprobante</div>
     </div>`;
+}
+
+
+// ═══ ALERTAS DE STOCK BAJO ════════════════════════════════════════════════════
+
+/**
+ * Verifica stock bajo al iniciar o al entrar a inventario.
+ * Muestra el banner flotante en POS si hay productos por debajo del mínimo.
+ */
+async function verificarStockBajo() {
+  try {
+    const res  = await apiFetch(`${API}/productos/stock-bajo`);
+    const data = await res.json();
+    if (!res.ok || !data.success) return;
+
+    const banner = document.getElementById("stock-alert-banner");
+    const textEl = document.getElementById("stock-alert-text");
+
+    if (data.total > 0 && banner) {
+      textEl.textContent = `${data.total} producto${data.total !== 1 ? "s" : ""} con stock bajo`;
+      banner.classList.remove("hidden");
+
+      // Auto-ocultar después de 8 segundos
+      setTimeout(() => banner.classList.add("hidden"), 8000);
+    }
+  } catch (_) {}
+}
+
+/**
+ * Muestra el panel de alertas de stock dentro del inventario.
+ */
+async function mostrarAlertasStockEnInventario() {
+  try {
+    const res  = await apiFetch(`${API}/productos/stock-bajo`);
+    const data = await res.json();
+    const panel = document.getElementById("alerta-stock-panel");
+    const lista = document.getElementById("alerta-stock-lista");
+    if (!panel || !lista) return;
+
+    if (data.total === 0) {
+      panel.classList.add("hidden");
+      return;
+    }
+
+    panel.classList.remove("hidden");
+    lista.innerHTML = data.data.map(p => {
+      const cls = p.stock === 0 ? "cero" : "";
+      return `<div class="alerta-item">
+        <span class="alerta-item-nombre">${escapeHtml(p.nombre)}</span>
+        <span class="alerta-item-stock ${cls}">
+          ${p.stock === 0 ? "SIN STOCK" : `${p.stock} u. (mín: ${p.stock_minimo})`}
+        </span>
+      </div>`;
+    }).join("");
+  } catch (_) {}
+}
+
+function cerrarAlertaStock() {
+  const panel = document.getElementById("alerta-stock-panel");
+  if (panel) panel.classList.add("hidden");
+}
+
+/**
+ * Muestra toasts de alerta tras completar una venta.
+ */
+function mostrarAlertasStockVenta(alertas) {
+  alertas.forEach(a => {
+    const msg = a.stock === 0
+      ? `⚠ SIN STOCK: ${a.nombre}`
+      : `⚠ Stock bajo: ${a.nombre} (quedan ${a.stock})`;
+    mostrarToast(msg, "warning");
+  });
+}
+
+// ─── Helper: etiqueta legible del medio de pago ────────────────────────────────
+function _labelMedioPago(medio) {
+  const labels = {
+    efectivo:      "💵 Efectivo",
+    debito:        "💳 Débito",
+    credito:       "💳 Crédito",
+    transferencia: "🏦 Transferencia",
+    qr:            "📱 QR",
+  };
+  return labels[medio] || medio || "Efectivo";
 }
 
 // ═══ UTILIDADES ═══════════════════════════════════════════════════════════════
