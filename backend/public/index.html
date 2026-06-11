@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KOSKIO APP</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <!-- TOPBAR -->
+  <header class="topbar">
+    <div class="topbar-brand">
+      <span class="brand-icon">⬡</span>
+      <span class="brand-name">KOSKIO <span class="brand-accent">APP</span></span>
+      <span class="brand-tenant" id="header-tenant">—</span>
+    </div>
+    <nav class="topbar-nav">
+      <button class="nav-btn active" data-view="pos" onclick="switchView('pos')">
+        <span class="nav-icon">⌨</span> Punto de Venta
+      </button>
+      <button class="nav-btn" data-view="ventas" id="nav-ventas" onclick="switchView('ventas')">
+        <span class="nav-icon">◈</span> Ventas
+      </button>
+      <button class="nav-btn" data-view="caja" id="nav-caja" onclick="switchView('caja')">
+        <span class="nav-icon">⊡</span> Caja
+      </button>
+      <button class="nav-btn" data-view="inventario" id="nav-inventario" onclick="switchView('inventario')">
+        <span class="nav-icon">☰</span> Inventario
+      </button>
+      <button class="nav-btn" data-view="usuarios" id="nav-usuarios" onclick="switchView('usuarios')">
+        <span class="nav-icon">◎</span> Usuarios
+      </button>
+      <button class="nav-btn" data-view="config" id="nav-config" onclick="switchView('config')">
+        <span class="nav-icon">⚙</span> Config
+      </button>
+    </nav>
+    <div class="topbar-info">
+      <span id="clock" class="clock">00:00:00</span>
+      <span class="separator">|</span>
+      <div class="user-info">
+        <span class="user-nombre" id="header-nombre">—</span>
+        <span class="user-rol" id="header-rol">—</span>
+      </div>
+      <button class="btn-logout" onclick="cerrarSesion()" title="Cerrar sesión">⏻</button>
+    </div>
+  </header>
+
+  <!-- VIEW: POS -->
+  <main id="view-pos" class="view active">
+    <div class="pos-layout">
+      <section class="pos-left">
+        <div class="scan-bar">
+          <div class="scan-bar-inner">
+            <span class="scan-icon">⬡</span>
+            <input type="text" id="barcode-input" class="barcode-input"
+              placeholder="Escanear código o escribir y presionar ENTER..."
+              autocomplete="off" autofocus />
+            <kbd class="key-hint">ENTER</kbd>
+          </div>
+          <div id="scan-feedback" class="scan-feedback"></div>
+        </div>
+        <div class="cart-container">
+          <div class="cart-header">
+            <span class="cart-title">CARRITO</span>
+            <span id="cart-count" class="cart-count">0 ítems</span>
+            <button class="btn-clear" onclick="limpiarCarrito()">✕ Vaciar</button>
+          </div>
+          <div class="cart-scroll">
+            <table class="cart-table">
+              <thead><tr><th>#</th><th>Producto</th><th>Precio Unit.</th><th>Cant.</th><th>Subtotal</th><th></th></tr></thead>
+              <tbody id="cart-body"></tbody>
+            </table>
+            <div id="cart-empty" class="cart-empty">
+              <div class="cart-empty-icon">⬡</div>
+              <p>El carrito está vacío.</p>
+              <p class="cart-empty-hint">Escanea un código de barras para comenzar.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="pos-right">
+        <div class="totales-card">
+          <div class="totales-row"><span>Subtotal</span><span id="display-subtotal">$0,00</span></div>
+          <div class="totales-divider"></div>
+          <div class="totales-row total-row"><span>TOTAL</span><span id="display-total">$0,00</span></div>
+        </div>
+        <div class="shortcuts-card">
+          <p class="shortcuts-title">Atajos</p>
+          <div class="shortcut"><kbd>ENTER</kbd><span>Agregar producto</span></div>
+          <div class="shortcut"><kbd>F2</kbd><span>Abrir cobro</span></div>
+          <div class="shortcut"><kbd>ESC</kbd><span>Vaciar carrito</span></div>
+          <div class="shortcut"><kbd>F5</kbd><span>Ventas del día</span></div>
+        </div>
+        <button class="btn-cobrar" onclick="abrirModalCobro()" id="btn-cobrar" disabled>
+          <span class="btn-cobrar-icon">$</span><span>COBRAR</span><kbd class="btn-cobrar-key">F2</kbd>
+        </button>
+      </section>
+    </div>
+  </main>
+
+  <!-- VIEW: VENTAS -->
+  <main id="view-ventas" class="view">
+    <div class="inv-layout">
+      <div class="inv-header">
+        <h2 class="inv-title">Historial de Ventas</h2>
+        <div class="inv-actions ventas-filtros">
+          <div class="filtro-grupo">
+            <label class="filtro-label">Desde</label>
+            <input type="date" id="filtro-desde" class="filtro-input" onchange="cargarVentas()" />
+          </div>
+          <div class="filtro-grupo">
+            <label class="filtro-label">Hasta</label>
+            <input type="date" id="filtro-hasta" class="filtro-input" onchange="cargarVentas()" />
+          </div>
+          <button class="btn-filtro-limpiar" onclick="limpiarFiltrosVentas()">✕ Limpiar</button>
+          <button class="btn-nuevo" onclick="cargarVentas()">↻ Actualizar</button>
+        </div>
+      </div>
+      <div class="ventas-resumen">
+        <div class="resumen-card"><span class="resumen-label">Total Ventas</span><span class="resumen-valor" id="resumen-cantidad">—</span></div>
+        <div class="resumen-card resumen-highlight"><span class="resumen-label">Monto Total</span><span class="resumen-valor" id="resumen-monto">—</span></div>
+        <div class="resumen-card"><span class="resumen-label">Promedio por Venta</span><span class="resumen-valor" id="resumen-promedio">—</span></div>
+      </div>
+      <div class="inv-table-wrapper">
+        <table class="inv-table">
+          <thead><tr><th>ID</th><th>Fecha y Hora</th><th>Cajero</th><th>Total</th><th>Efectivo</th><th>Vuelto</th><th>CAE</th><th>Estado</th><th>Detalle</th></tr></thead>
+          <tbody id="ventas-body"><tr><td colspan="9" class="loading-row">Cargando ventas...</td></tr></tbody>
+        </table>
+      </div>
+      <div class="paginacion" id="paginacion"></div>
+    </div>
+  </main>
+
+  <!-- VIEW: CAJA -->
+  <main id="view-caja" class="view">
+    <div class="caja-layout">
+
+      <div class="caja-header">
+        <h2 class="inv-title">Cierre de Caja</h2>
+        <div class="caja-fecha-selector">
+          <label>Fecha</label>
+          <input type="date" id="caja-fecha" class="filtro-input" onchange="cargarCaja()" />
+          <button class="btn-nuevo" onclick="cargarCaja()">↻ Actualizar</button>
+        </div>
+      </div>
+
+      <!-- KPIs -->
+      <div class="kpi-grid">
+        <div class="kpi-card kpi-primary">
+          <span class="kpi-label">Monto Total Vendido</span>
+          <span class="kpi-valor" id="kpi-total">—</span>
+          <span class="kpi-sub" id="kpi-total-sub">—</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">Cantidad de Ventas</span>
+          <span class="kpi-valor" id="kpi-cantidad">—</span>
+          <span class="kpi-sub" id="kpi-ticket-prom">Ticket promedio: —</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">Efectivo Recibido</span>
+          <span class="kpi-valor" id="kpi-efectivo">—</span>
+          <span class="kpi-sub">Total ingresado en caja</span>
+        </div>
+        <div class="kpi-card kpi-amber">
+          <span class="kpi-label">Vuelto Entregado</span>
+          <span class="kpi-valor" id="kpi-vuelto">—</span>
+          <span class="kpi-sub">Salida de caja</span>
+        </div>
+      </div>
+
+      <div class="caja-grid">
+        <!-- Por cajero -->
+        <div class="caja-panel" id="panel-cajeros">
+          <div class="caja-panel-title">Ventas por Cajero</div>
+          <div id="cajeros-content"><p class="empty-state">Sin ventas en esta fecha.</p></div>
+        </div>
+
+        <!-- Top productos -->
+        <div class="caja-panel" id="panel-productos">
+          <div class="caja-panel-title">Top 5 Productos</div>
+          <div id="top-productos-content"><p class="empty-state">Sin ventas en esta fecha.</p></div>
+        </div>
+
+        <!-- Gráfico por hora -->
+        <div class="grafico-horas">
+          <div class="grafico-horas-title">Actividad por Hora del Día</div>
+          <div class="grafico-barras" id="grafico-horas-content">
+            <p class="empty-state" style="width:100%">Sin datos.</p>
+          </div>
+        </div>
+
+        <!-- Panel de cierre -->
+        <div class="caja-cierre-panel">
+          <div class="cierre-info">
+            <div class="cierre-info-titulo">Registrar Cierre de Caja</div>
+            <div class="cierre-info-sub" id="cierre-info-sub">Fecha: — | Estado: pendiente</div>
+            <textarea id="cierre-notas" class="cierre-notas" rows="2"
+              placeholder="Notas opcionales (ej: diferencia de caja, observaciones...)"></textarea>
+          </div>
+          <div id="cierre-accion">
+            <button class="btn-cerrar-caja" onclick="cerrarCaja()" id="btn-cerrar-caja">
+              🔒 Registrar Cierre
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Historial de cierres -->
+      <div class="historial-cierres">
+        <div class="historial-cierres-title">Historial de Cierres Anteriores</div>
+        <table class="historial-table">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Ventas</th>
+              <th>Monto Total</th>
+              <th>Efectivo</th>
+              <th>Vuelto</th>
+              <th>Admin</th>
+              <th>Registrado</th>
+              <th>Notas</th>
+            </tr>
+          </thead>
+          <tbody id="historial-cierres-body">
+            <tr><td colspan="8" class="empty-state">Cargando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+
+      <!-- Panel de backup -->
+      <div class="backup-panel">
+        <div class="backup-panel-left">
+          <div class="backup-panel-title">💾 Respaldo de Base de Datos</div>
+          <div class="backup-panel-sub" id="backup-ultimo">Último backup: cargando...</div>
+        </div>
+        <div class="backup-panel-right">
+          <button class="btn-backup" id="btn-backup-manual" onclick="hacerBackupManual()">
+            💾 Hacer Backup Ahora
+          </button>
+        </div>
+      </div>
+
+      <!-- Historial de backups -->
+      <div class="historial-cierres">
+        <div class="historial-cierres-title">Historial de Backups (últimos 30)</div>
+        <table class="historial-table">
+          <thead>
+            <tr>
+              <th>Archivo</th>
+              <th>Tamaño</th>
+              <th>Fecha y hora</th>
+            </tr>
+          </thead>
+          <tbody id="backup-lista-body">
+            <tr><td colspan="3" class="empty-state">Cargando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- VIEW: INVENTARIO -->
+  <main id="view-inventario" class="view">
+    <div class="inv-layout">
+      <div class="inv-header">
+        <h2 class="inv-title">Gestión de Inventario</h2>
+        <div class="inv-actions">
+          <div class="search-box">
+            <span class="search-icon">⌕</span>
+            <input type="text" id="inv-search" placeholder="Buscar por nombre o código..." oninput="buscarProductos()" />
+          </div>
+          <button class="btn-nuevo" id="btn-nuevo-producto" onclick="abrirModalProducto()">+ Nuevo Producto</button>
+        </div>
+      </div>
+      <!-- Alertas de stock bajo -->
+      <div id="alerta-stock-panel" class="alerta-stock-panel hidden">
+        <div class="alerta-stock-header">
+          <span class="alerta-stock-icon">⚠</span>
+          <span class="alerta-stock-titulo">Productos con stock bajo</span>
+          <button class="alerta-stock-cerrar" onclick="cerrarAlertaStock()">✕</button>
+        </div>
+        <div id="alerta-stock-lista" class="alerta-stock-lista"></div>
+      </div>
+
+      <div class="inv-table-wrapper">
+        <table class="inv-table">
+          <thead><tr><th>ID</th><th>Código de Barras</th><th>Nombre</th><th>Precio</th><th>Stock</th><th>Stock Mín.</th><th>Actualizado</th><th>Acciones</th></tr></thead>
+          <tbody id="inv-body"><tr><td colspan="8" class="loading-row">Cargando productos...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <!-- VIEW: USUARIOS -->
+  <main id="view-usuarios" class="view">
+    <div class="inv-layout">
+      <div class="inv-header">
+        <h2 class="inv-title">Gestión de Usuarios</h2>
+        <div class="inv-actions">
+          <button class="btn-nuevo" onclick="abrirModalUsuario()">+ Nuevo Usuario</button>
+        </div>
+      </div>
+      <div class="inv-table-wrapper">
+        <table class="inv-table">
+          <thead><tr><th>ID</th><th>Nombre</th><th>Usuario</th><th>Rol</th><th>Estado</th><th>Último acceso</th><th>Acciones</th></tr></thead>
+          <tbody id="usr-body"><tr><td colspan="7" class="loading-row">Cargando...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <!-- MODAL: COBRO -->
+  <div id="modal-cobro" class="modal-overlay" onclick="cerrarModalCobro(event)">
+    <div class="modal-box">
+      <div class="modal-header"><h3>💳 Procesar Cobro</h3><button class="modal-close" onclick="cerrarModalCobro()">✕</button></div>
+      <div class="modal-body">
+
+        <!-- PASO 1: Efectivo -->
+        <div id="cobro-paso-1">
+          <div class="cobro-total-display">
+            <span class="cobro-label">Total a Cobrar</span>
+            <span id="modal-total" class="cobro-amount">$0,00</span>
+          </div>
+          <div class="cobro-input-group">
+            <label for="input-efectivo">Efectivo recibido ($)</label>
+            <input type="number" id="input-efectivo" class="cobro-input" placeholder="0,00"
+              min="0" step="0.01" oninput="calcularVuelto()" onkeydown="handleCobroKey(event)" />
+          </div>
+          <div class="billetes-rapidos">
+            <span class="billetes-label">Rápido:</span>
+            <button class="billet-btn" onclick="setBillete(500)">$500</button>
+            <button class="billet-btn" onclick="setBillete(1000)">$1.000</button>
+            <button class="billet-btn" onclick="setBillete(2000)">$2.000</button>
+            <button class="billet-btn" onclick="setBillete(5000)">$5.000</button>
+            <button class="billet-btn" onclick="setBillete(10000)">$10.000</button>
+            <button class="billet-btn" onclick="setBillete(20000)">$20.000</button>
+          </div>
+          <div class="vuelto-display">
+            <span class="vuelto-label">Vuelto</span>
+            <span id="modal-vuelto" class="vuelto-amount neutral">—</span>
+          </div>
+          <div id="cobro-error" class="cobro-error hidden"></div>
+        </div>
+
+        <!-- PASO 1b: Medio de pago (debajo del efectivo) -->
+        <div id="cobro-medio-pago" class="medio-pago-selector">
+          <div class="medio-pago-label">Medio de pago</div>
+          <div class="medio-pago-btns">
+            <button class="medio-btn active" data-medio="efectivo" onclick="seleccionarMedio('efectivo')">
+              <span class="medio-icon">💵</span><span>Efectivo</span>
+            </button>
+            <button class="medio-btn" data-medio="debito" onclick="seleccionarMedio('debito')">
+              <span class="medio-icon">💳</span><span>Débito</span>
+            </button>
+            <button class="medio-btn" data-medio="credito" onclick="seleccionarMedio('credito')">
+              <span class="medio-icon">💳</span><span>Crédito</span>
+            </button>
+            <button class="medio-btn" data-medio="transferencia" onclick="seleccionarMedio('transferencia')">
+              <span class="medio-icon">🏦</span><span>Transfer.</span>
+            </button>
+            <button class="medio-btn" data-medio="qr" onclick="seleccionarMedio('qr')">
+              <span class="medio-icon">📱</span><span>QR</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- PASO 2: ¿Facturar? -->
+        <div id="cobro-paso-2" class="hidden">
+          <div class="factura-pregunta">
+            <div class="factura-pregunta-icon">🧾</div>
+            <div class="factura-pregunta-titulo">¿El cliente necesita factura?</div>
+            <div class="factura-pregunta-sub">Podés emitir factura electrónica o solo registrar la venta</div>
+          </div>
+          <div class="factura-opciones">
+            <button class="factura-opcion factura-si" onclick="procesarVenta(true)">
+              <span class="factura-opcion-icon">✅</span>
+              <span class="factura-opcion-titulo">Sí, generar factura</span>
+              <span class="factura-opcion-sub">Emite CAE electrónico</span>
+            </button>
+            <button class="factura-opcion factura-no" onclick="procesarVenta(false)">
+              <span class="factura-opcion-icon">🧾</span>
+              <span class="factura-opcion-titulo">No, solo ticket</span>
+              <span class="factura-opcion-sub">Registra sin factura</span>
+            </button>
+          </div>
+        </div>
+
+      </div>
+      <div class="modal-footer" id="cobro-footer">
+        <button class="btn-cancelar" onclick="cerrarModalCobro()">Cancelar</button>
+        <button class="btn-confirmar" id="btn-confirmar" onclick="irAPasoFactura()" disabled>
+          <span id="btn-confirmar-text">Continuar</span><kbd>ENTER</kbd>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: DETALLE DE VENTA -->
+  <div id="modal-detalle-venta" class="modal-overlay" onclick="cerrarModalDetalleVenta(event)">
+    <div class="modal-box modal-wide">
+      <div class="modal-header">
+        <h3 id="detalle-venta-title">Detalle de Venta</h3>
+        <button class="modal-close" onclick="cerrarModalDetalleVenta()">✕</button>
+      </div>
+      <div class="modal-body" id="detalle-venta-body"></div>
+      <div class="modal-footer">
+        <button class="btn-confirmar full-width" onclick="cerrarModalDetalleVenta()">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: PRODUCTO -->
+  <div id="modal-producto" class="modal-overlay" onclick="cerrarModalProducto(event)">
+    <div class="modal-box">
+      <div class="modal-header"><h3 id="modal-producto-title">Nuevo Producto</h3><button class="modal-close" onclick="cerrarModalProducto()">✕</button></div>
+      <div class="modal-body">
+        <input type="hidden" id="prod-id" />
+        <div class="form-group"><label>Código de Barras *</label><input type="text" id="prod-codigo" class="form-input" placeholder="Ej: 7790580000001" /></div>
+        <div class="form-group"><label>Nombre del Producto *</label><input type="text" id="prod-nombre" class="form-input" placeholder="Ej: Coca Cola 500ml" /></div>
+        <div class="form-row">
+          <div class="form-group"><label>Precio ($) *</label><input type="number" id="prod-precio" class="form-input" placeholder="0.00" min="0" step="0.01" /></div>
+          <div class="form-group"><label>Stock actual</label><input type="number" id="prod-stock" class="form-input" placeholder="0" min="0" /></div>
+        </div>
+        <div class="form-group">
+          <label>Stock mínimo (alerta cuando baje de este número)</label>
+          <input type="number" id="prod-stock-min" class="form-input" placeholder="5" min="0" />
+        </div>
+        <div id="prod-error" class="cobro-error hidden"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-cancelar" onclick="cerrarModalProducto()">Cancelar</button>
+        <button class="btn-confirmar" onclick="guardarProducto()"><span id="prod-btn-text">Guardar Producto</span></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: USUARIO -->
+  <div id="modal-usuario" class="modal-overlay" onclick="cerrarModalUsuario(event)">
+    <div class="modal-box">
+      <div class="modal-header"><h3 id="modal-usuario-title">Nuevo Usuario</h3><button class="modal-close" onclick="cerrarModalUsuario()">✕</button></div>
+      <div class="modal-body">
+        <input type="hidden" id="usr-id" />
+        <div class="form-group"><label>Nombre completo *</label><input type="text" id="usr-nombre" class="form-input" placeholder="Ej: Juan Pérez" /></div>
+        <div class="form-row">
+          <div class="form-group"><label>Nombre de usuario *</label><input type="text" id="usr-usuario" class="form-input" placeholder="Ej: juan" /></div>
+          <div class="form-group"><label>Rol *</label>
+            <select id="usr-rol" class="form-input">
+              <option value="cajero">Cajero</option>
+              <option value="admin">Administrador</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label id="usr-password-label">Contraseña *</label>
+          <input type="password" id="usr-password" class="form-input" placeholder="Mínimo 4 caracteres" />
+        </div>
+        <div class="form-group form-check">
+          <label class="check-label"><input type="checkbox" id="usr-activo" checked /><span>Usuario activo</span></label>
+        </div>
+        <div id="usr-error" class="cobro-error hidden"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-cancelar" onclick="cerrarModalUsuario()">Cancelar</button>
+        <button class="btn-confirmar" onclick="guardarUsuario()"><span id="usr-btn-text">Crear Usuario</span></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: COMPROBANTE -->
+  <div id="modal-comprobante" class="modal-overlay" onclick="cerrarModalComprobante(event)">
+    <div class="modal-box comprobante-box">
+      <div class="modal-header"><h3>✅ Venta Completada</h3><button class="modal-close" onclick="cerrarModalComprobante()">✕</button></div>
+      <div class="modal-body" id="comprobante-body"></div>
+      <div class="modal-footer">
+        <button class="btn-confirmar full-width" onclick="cerrarModalComprobante()">Nueva Venta <kbd>ENTER</kbd></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- VIEW: CONFIGURACIÓN -->
+  <main id="view-config" class="view">
+    <div class="inv-layout">
+      <div class="inv-header">
+        <h2 class="inv-title">Configuración del Negocio</h2>
+        <div class="inv-actions">
+          <button class="btn-nuevo" onclick="guardarConfig()">💾 Guardar Cambios</button>
+        </div>
+      </div>
+
+      <div class="config-layout">
+
+        <!-- Formulario -->
+        <div class="config-form-panel">
+
+          <div class="config-section">
+            <div class="config-section-title">🏪 Datos del Negocio</div>
+
+            <div class="form-group">
+              <label>Nombre del negocio *</label>
+              <input type="text" id="cfg-nombre" class="form-input"
+                placeholder="Ej: Almacén Don Juan" oninput="actualizarPreview()" />
+            </div>
+            <div class="form-group">
+              <label>Dirección</label>
+              <input type="text" id="cfg-direccion" class="form-input"
+                placeholder="Ej: Av. Corrientes 1234, CABA" oninput="actualizarPreview()" />
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>CUIT</label>
+                <input type="text" id="cfg-cuit" class="form-input"
+                  placeholder="Ej: 20-12345678-9" oninput="actualizarPreview()" />
+              </div>
+              <div class="form-group">
+                <label>Teléfono</label>
+                <input type="text" id="cfg-telefono" class="form-input"
+                  placeholder="Ej: (011) 1234-5678" oninput="actualizarPreview()" />
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Email</label>
+              <input type="email" id="cfg-email" class="form-input"
+                placeholder="Ej: contacto@minegocio.com" oninput="actualizarPreview()" />
+            </div>
+          </div>
+
+          <div class="config-section">
+            <div class="config-section-title">🧾 Configuración del Ticket</div>
+
+            <div class="form-group">
+              <label>Umbral global de stock mínimo (unidades)</label>
+              <input type="number" id="cfg-stock-minimo" class="form-input"
+                placeholder="5" min="0" oninput="actualizarPreview()" />
+              <small style="color:var(--text-muted);font-size:0.75rem;margin-top:4px;display:block">
+                Se usa como valor por defecto al crear nuevos productos
+              </small>
+            </div>
+            <div class="form-group">
+              <label>Mensaje al pie del ticket</label>
+              <input type="text" id="cfg-ticket-mensaje" class="form-input"
+                placeholder="Ej: ¡Gracias por su compra!" oninput="actualizarPreview()" />
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Punto de Venta AFIP</label>
+                <input type="number" id="cfg-punto-venta" class="form-input"
+                  placeholder="1" min="1" max="9999" oninput="actualizarPreview()" />
+              </div>
+              <div class="form-group">
+                <label>Tipo de Comprobante</label>
+                <select id="cfg-tipo-cbte" class="form-input" onchange="actualizarPreview()">
+                  <option value="11">Factura C (Monotributista)</option>
+                  <option value="1">Factura A (R. Inscripto)</option>
+                  <option value="6">Factura B (R. Inscripto)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div id="config-error" class="cobro-error hidden"></div>
+          <div id="config-ok" class="config-ok hidden">✅ Configuración guardada correctamente.</div>
+
+        </div>
+
+        <!-- Preview del ticket -->
+        <div class="config-preview-panel">
+          <div class="config-section-title">👁 Vista previa del ticket</div>
+          <div class="ticket-preview" id="ticket-preview">
+            <!-- Se genera dinámicamente -->
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </main>
+
+  <!-- Panel de alerta de stock bajo en POS -->
+  <div id="stock-alert-banner" class="stock-alert-banner hidden" onclick="switchView('inventario')">
+    <span class="stock-alert-icon">⚠</span>
+    <span id="stock-alert-text">Productos con stock bajo</span>
+    <span class="stock-alert-ver">Ver inventario →</span>
+  </div>
+
+  <div id="toast-container" class="toast-container"></div>
+  <script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KOSKIO APP — Login</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+  <style>
+    body {
+      display: flex; align-items: center; justify-content: center;
+      min-height: 100vh; background: var(--bg-base);
+      background-image:
+        radial-gradient(circle at 50% 50%, rgba(0,230,118,0.03) 0%, transparent 70%),
+        linear-gradient(var(--border) 1px, transparent 1px),
+        linear-gradient(90deg, var(--border) 1px, transparent 1px);
+      background-size: 100% 100%, 40px 40px, 40px 40px;
+    }
+    .login-wrapper { width: 100%; max-width: 420px; padding: 24px; }
+    .login-brand { text-align: center; margin-bottom: 36px; }
+    .login-brand-icon { font-size: 3rem; color: var(--accent); display: block; margin-bottom: 12px; filter: drop-shadow(0 0 20px var(--accent)); }
+    .login-brand-name { font-family: var(--font-mono); font-size: 1.8rem; font-weight: 700; letter-spacing: -0.02em; }
+    .login-brand-name span { color: var(--accent); }
+    .login-brand-sub { font-size: 0.8rem; color: var(--text-muted); margin-top: 4px; letter-spacing: 0.1em; font-family: var(--font-mono); }
+    .login-card { background: var(--bg-surface); border: 1px solid var(--border-light); border-radius: var(--radius-lg); padding: 32px; box-shadow: 0 24px 64px rgba(0,0,0,0.4); }
+    .login-title { font-size: 1rem; font-weight: 700; margin-bottom: 24px; display: flex; align-items: center; gap: 8px; }
+    .login-title::before { content: ''; display: inline-block; width: 3px; height: 1em; background: var(--accent); border-radius: 2px; }
+    .login-form-group { margin-bottom: 16px; }
+    .login-form-group label { display: block; font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 6px; text-transform: uppercase; }
+    .login-input { width: 100%; padding: 12px 14px; background: var(--bg-elevated); border: 1px solid var(--border-light); border-radius: var(--radius); color: var(--text-primary); font-family: var(--font-mono); font-size: 0.95rem; outline: none; transition: border-color 0.2s, box-shadow 0.2s; }
+    .login-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+    .login-input::placeholder { color: var(--text-muted); }
+    .login-input.codigo-input { text-transform: uppercase; letter-spacing: 0.15em; font-weight: 700; font-size: 1.1rem; text-align: center; }
+    .login-btn { width: 100%; padding: 14px; margin-top: 8px; background: var(--accent); color: #000; border: none; border-radius: var(--radius); font-family: var(--font-sans); font-size: 0.95rem; font-weight: 800; letter-spacing: 0.06em; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px; }
+    .login-btn:hover:not(:disabled) { background: var(--accent-dim); box-shadow: 0 6px 20px var(--accent-glow); transform: translateY(-1px); }
+    .login-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+    .login-error { margin-top: 14px; padding: 10px 14px; background: var(--danger-glow); border: 1px solid var(--danger); border-radius: var(--radius); color: var(--danger); font-size: 0.83rem; text-align: center; display: none; }
+    .login-error.visible { display: block; }
+    .login-footer { margin-top: 24px; text-align: center; font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono); }
+    .login-footer a { color: var(--accent); text-decoration: none; font-weight: 600; }
+    .login-footer a:hover { text-decoration: underline; }
+    .login-divider { display: flex; align-items: center; gap: 12px; margin: 20px 0; color: var(--text-muted); font-size: 0.75rem; font-family: var(--font-mono); }
+    .login-divider::before, .login-divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+  </style>
+</head>
+<body>
+  <div class="login-wrapper">
+    <div class="login-brand">
+      <span class="login-brand-icon">⬡</span>
+      <div class="login-brand-name">KOSKIO <span>APP</span></div>
+      <div class="login-brand-sub">SISTEMA DE PUNTO DE VENTA</div>
+    </div>
+
+    <div class="login-card">
+      <div class="login-title">Iniciar sesión</div>
+
+      <div class="login-form-group">
+        <label for="input-codigo">Código del Negocio</label>
+        <input type="text" id="input-codigo" class="login-input codigo-input"
+          placeholder="ALMC-X7K" autocomplete="off" autofocus />
+      </div>
+
+      <div class="login-form-group">
+        <label for="input-usuario">Usuario</label>
+        <input type="text" id="input-usuario" class="login-input"
+          placeholder="tu_usuario" autocomplete="username" />
+      </div>
+
+      <div class="login-form-group">
+        <label for="input-password">Contraseña</label>
+        <input type="password" id="input-password" class="login-input"
+          placeholder="••••••••" autocomplete="current-password" />
+      </div>
+
+      <button class="login-btn" id="btn-login" onclick="hacerLogin()">
+        <span id="btn-login-text">Ingresar al sistema</span>
+      </button>
+
+      <div class="login-error" id="login-error"></div>
+
+      <div class="login-divider">o</div>
+
+      <a href="/registro.html" style="display:block;text-align:center;color:var(--accent);font-weight:700;font-size:0.88rem;text-decoration:none;">
+        Registrar un nuevo negocio →
+      </a>
+    </div>
+
+    <div class="login-footer">
+      KOSKIO APP · SaaS v2.0.0
+    </div>
+  </div>
+
+  <script>
+    const API = window.location.origin + "/api";
+
+    // Si ya hay token válido, redirigir
+    window.addEventListener("DOMContentLoaded", async () => {
+      const token = localStorage.getItem("pos_token");
+      if (token) {
+        try {
+          const res = await fetch(`${API}/auth/me`, { headers: { Authorization: `Bearer ${token}` } });
+          if (res.ok) { window.location.href = "/index.html"; return; }
+        } catch (_) {}
+        localStorage.removeItem("pos_token");
+        localStorage.removeItem("pos_usuario");
+      }
+      // Pre-llenar código si lo tiene guardado
+      const lastCode = localStorage.getItem("pos_last_codigo");
+      if (lastCode) document.getElementById("input-codigo").value = lastCode;
+    });
+
+    // Enter navigation
+    document.getElementById("input-codigo").addEventListener("keydown", e => {
+      if (e.key === "Enter") document.getElementById("input-usuario").focus();
+    });
+    document.getElementById("input-usuario").addEventListener("keydown", e => {
+      if (e.key === "Enter") document.getElementById("input-password").focus();
+    });
+    document.getElementById("input-password").addEventListener("keydown", e => {
+      if (e.key === "Enter") hacerLogin();
+    });
+
+    async function hacerLogin() {
+      const codigo   = document.getElementById("input-codigo").value.trim().toUpperCase();
+      const usuario  = document.getElementById("input-usuario").value.trim();
+      const password = document.getElementById("input-password").value;
+      const btn      = document.getElementById("btn-login");
+      const btnText  = document.getElementById("btn-login-text");
+      const errorEl  = document.getElementById("login-error");
+
+      if (!codigo || !usuario || !password) { mostrarError("Completá todos los campos."); return; }
+
+      btn.disabled = true;
+      btnText.innerHTML = '<span class="spinner" style="border-color:rgba(0,0,0,0.3);border-top-color:#000"></span> Verificando...';
+      errorEl.classList.remove("visible");
+
+      try {
+        const res = await fetch(`${API}/auth/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ codigo_negocio: codigo, usuario, password }),
+        });
+        const data = await res.json();
+
+        if (!res.ok || !data.success) {
+          mostrarError(data.mensaje || "Error al iniciar sesión.");
+          return;
+        }
+
+        // Guardar token, usuario y código del negocio
+        localStorage.setItem("pos_token",       data.token);
+        localStorage.setItem("pos_usuario",     JSON.stringify(data.usuario));
+        localStorage.setItem("pos_last_codigo", codigo);
+
+        window.location.href = "/index.html";
+      } catch (err) {
+        mostrarError("No se pudo conectar con el servidor.");
+      } finally {
+        btn.disabled = false;
+        btnText.textContent = "Ingresar al sistema";
+      }
+    }
+
+    function mostrarError(msg) {
+      const el = document.getElementById("login-error");
+      el.textContent = msg;
+      el.classList.add("visible");
+    }
+  </script>
+</body>
+</html>

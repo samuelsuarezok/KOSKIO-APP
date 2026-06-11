@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Ticket de Venta</title>
+  <style>
+    /* ── Reset ── */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    /* ── Pantalla: centrado con fondo oscuro ── */
+    body {
+      background: #1a1a2e;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-height: 100vh;
+      padding: 24px 16px;
+      font-family: 'Courier New', Courier, monospace;
+    }
+
+    /* ── Ticket ── */
+    .ticket {
+      width: 300px;
+      background: #fff;
+      color: #000;
+      padding: 16px 14px;
+      font-size: 11px;
+      line-height: 1.5;
+      position: relative;
+    }
+
+    /* Efecto borde dentado arriba y abajo */
+    .ticket::before,
+    .ticket::after {
+      content: '';
+      display: block;
+      height: 10px;
+      background:
+        radial-gradient(circle at 5px 10px, #1a1a2e 5px, #fff 5px) repeat-x;
+      background-size: 10px 10px;
+    }
+    .ticket::before { margin: -16px -14px 8px; }
+    .ticket::after  { margin: 8px -14px -16px; }
+
+    /* ── Secciones ── */
+    .ticket-header  { text-align: center; margin-bottom: 10px; }
+    .ticket-divider { border: none; border-top: 1px dashed #aaa; margin: 8px 0; }
+    .ticket-footer  { text-align: center; margin-top: 10px; font-size: 10px; color: #555; }
+
+    /* Nombre del negocio */
+    .negocio-nombre {
+      font-size: 18px;
+      font-weight: bold;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+    .negocio-sub { font-size: 10px; color: #555; margin-top: 2px; }
+
+    /* Datos del comprobante */
+    .comp-datos { font-size: 10px; color: #333; margin-top: 6px; }
+
+    /* Tabla de productos */
+    .items-table { width: 100%; border-collapse: collapse; margin: 6px 0; }
+    .items-table th {
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      border-bottom: 1px solid #000;
+      padding: 3px 2px;
+      text-align: left;
+    }
+    .items-table th:last-child,
+    .items-table td:last-child { text-align: right; }
+    .items-table td { padding: 4px 2px; font-size: 10px; vertical-align: top; }
+    .items-table tr:last-child td { border-bottom: 1px solid #ccc; }
+    .item-nombre  { max-width: 130px; word-break: break-word; }
+    .item-cant    { text-align: center; width: 28px; }
+    .item-precio  { text-align: right; width: 54px; white-space: nowrap; }
+    .item-subtotal{ text-align: right; width: 60px; white-space: nowrap; font-weight: bold; }
+
+    /* Totales */
+    .totales { margin-top: 6px; }
+    .total-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 2px 0;
+      font-size: 10px;
+    }
+    .total-row.total-final {
+      font-size: 14px;
+      font-weight: bold;
+      border-top: 2px solid #000;
+      margin-top: 4px;
+      padding-top: 4px;
+    }
+    .total-row.vuelto { color: #555; }
+
+    /* CAE */
+    .cae-section {
+      text-align: center;
+      font-size: 9px;
+      color: #444;
+      margin-top: 6px;
+      line-height: 1.6;
+    }
+    .cae-numero { font-size: 11px; font-weight: bold; letter-spacing: 1px; }
+
+    /* Código de barras simulado (líneas decorativas) */
+    .barcode {
+      margin: 8px auto 4px;
+      width: 160px;
+      height: 36px;
+      background: repeating-linear-gradient(
+        90deg,
+        #000 0px, #000 2px,
+        #fff 2px, #fff 4px,
+        #000 4px, #000 5px,
+        #fff 5px, #fff 7px,
+        #000 7px, #000 9px,
+        #fff 9px, #fff 12px,
+        #000 12px, #000 13px,
+        #fff 13px, #fff 15px
+      );
+    }
+
+    /* Gracias */
+    .gracias { font-size: 12px; font-weight: bold; margin: 4px 0 2px; }
+
+    /* ── Botones de acción (no se imprimen) ── */
+    .print-actions {
+      margin-top: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      width: 300px;
+    }
+    .btn-print {
+      padding: 14px;
+      background: #00e676;
+      color: #000;
+      border: none;
+      border-radius: 8px;
+      font-family: 'Syne', sans-serif;
+      font-size: 1rem;
+      font-weight: 800;
+      cursor: pointer;
+      letter-spacing: 0.04em;
+      transition: background 0.2s;
+    }
+    .btn-print:hover { background: #00c853; }
+    .btn-close {
+      padding: 12px;
+      background: transparent;
+      color: #8892a4;
+      border: 1px solid #2a3045;
+      border-radius: 8px;
+      font-size: 0.88rem;
+      cursor: pointer;
+      font-family: sans-serif;
+      transition: all 0.2s;
+    }
+    .btn-close:hover { color: #fff; border-color: #8892a4; }
+
+    /* ── Modo impresión: oculta todo excepto el ticket ── */
+    @media print {
+      body {
+        background: #fff !important;
+        padding: 0;
+        display: block;
+      }
+      .print-actions { display: none !important; }
+      .ticket {
+        width: 72mm;       /* 80mm de papel - ~8mm de márgenes de la impresora */
+        padding: 4px 6px;
+        box-shadow: none;
+      }
+      /* Forzar blanco y negro */
+      * { color: #000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .negocio-sub, .comp-datos, .cae-section, .ticket-footer { color: #333 !important; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- TICKET -->
+  <div class="ticket" id="ticket">
+
+    <!-- Cabecera del negocio -->
+    <div class="ticket-header">
+      <div class="negocio-nombre" id="t-negocio">KOSKIO APP</div>
+      <div class="negocio-sub" id="t-direccion">— Kiosco / Almacén —</div>
+      <div class="negocio-sub" id="t-cuit"></div>
+    </div>
+
+    <hr class="ticket-divider" />
+
+    <!-- Datos del comprobante -->
+    <div class="comp-datos">
+      <div>Factura C &nbsp;|&nbsp; Pto. Venta: <span id="t-ptoventa">0001</span></div>
+      <div>Comp. Nro: <span id="t-comprobante">00000001</span></div>
+      <div>Fecha: <span id="t-fecha">—</span></div>
+      <div>Cajero: <span id="t-cajero">—</span></div>
+    </div>
+
+    <hr class="ticket-divider" />
+
+    <!-- Productos -->
+    <table class="items-table">
+      <thead>
+        <tr>
+          <th class="item-nombre">Descripción</th>
+          <th class="item-cant">Cant</th>
+          <th class="item-precio">P.Unit</th>
+          <th class="item-subtotal">Subtotal</th>
+        </tr>
+      </thead>
+      <tbody id="t-items">
+        <!-- Se carga dinámicamente -->
+      </tbody>
+    </table>
+
+    <!-- Totales -->
+    <div class="totales">
+      <div class="total-row total-final">
+        <span>TOTAL</span>
+        <span id="t-total">$0,00</span>
+      </div>
+      <div class="total-row">
+        <span>Efectivo</span>
+        <span id="t-efectivo">$0,00</span>
+      </div>
+      <div class="total-row vuelto">
+        <span>Vuelto</span>
+        <span id="t-vuelto">$0,00</span>
+      </div>
+    </div>
+
+    <hr class="ticket-divider" />
+
+    <!-- CAE -->
+    <div class="cae-section">
+      <div>CAE Nro:</div>
+      <div class="cae-numero" id="t-cae">—</div>
+      <div>Fecha Vto. CAE: <span id="t-caevto">—</span></div>
+    </div>
+
+    <!-- Código de barras decorativo -->
+    <div class="barcode"></div>
+
+    <hr class="ticket-divider" />
+
+    <!-- Footer -->
+    <div class="ticket-footer">
+      <div class="gracias">¡Gracias por su compra!</div>
+      <div>Conserve su comprobante</div>
+      <div id="t-footer-extra" style="margin-top:4px"></div>
+    </div>
+
+  </div>
+
+  <!-- Botones (no se imprimen) -->
+  <div class="print-actions">
+    <button class="btn-print" onclick="window.print()">🖨 Imprimir Ticket</button>
+    <button class="btn-close" onclick="window.close()">✕ Cerrar</button>
+  </div>
+
+  <script>
+    // Lee los datos del ticket desde la URL (pasados como query params)
+    function leerParams() {
+      const p = new URLSearchParams(window.location.search);
+      return {
+        negocio:       p.get("negocio")       || "KOSKIO APP",
+        direccion:     p.get("direccion")      || "— Kiosco / Almacén —",
+        cuit:          p.get("cuit")           || "",
+        venta_id:      p.get("venta_id")       || "0",
+        ptoVenta:      p.get("pto_venta")      || "0001",
+        comprobante:   p.get("comprobante")    || "00000001",
+        fecha:         p.get("fecha")          || new Date().toLocaleString("es-AR"),
+        cajero:        p.get("cajero")         || "—",
+        total:         parseFloat(p.get("total")    || "0"),
+        efectivo:      parseFloat(p.get("efectivo") || "0"),
+        vuelto:        parseFloat(p.get("vuelto")   || "0"),
+        cae:           p.get("cae")            || "—",
+        cae_vto:       p.get("cae_vto")        || "—",
+        items:         JSON.parse(decodeURIComponent(p.get("items") || "[]")),
+        footer_extra:  p.get("footer_extra")   || "",
+      };
+    }
+
+    function formatPeso(v) {
+      return new Intl.NumberFormat("es-AR", {
+        style: "currency", currency: "ARS", minimumFractionDigits: 2
+      }).format(v || 0);
+    }
+
+    function formatFechaCAE(s) {
+      if (!s || s.length !== 8) return s || "—";
+      return `${s.slice(6,8)}/${s.slice(4,6)}/${s.slice(0,4)}`;
+    }
+
+    function escapeHtml(s) {
+      return String(s)
+        .replace(/&/g,"&amp;").replace(/</g,"&lt;")
+        .replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+    }
+
+    function renderTicket() {
+      const d = leerParams();
+
+      document.getElementById("t-negocio").textContent    = d.negocio;
+      document.getElementById("t-direccion").textContent  = d.direccion;
+      document.getElementById("t-cuit").textContent       = d.cuit ? `CUIT: ${d.cuit}` : "";
+      document.getElementById("t-ptoventa").textContent   = String(d.ptoVenta).padStart(4, "0");
+      document.getElementById("t-comprobante").textContent= String(d.comprobante).padStart(8, "0");
+      document.getElementById("t-fecha").textContent      = d.fecha;
+      document.getElementById("t-cajero").textContent     = d.cajero;
+      document.getElementById("t-total").textContent      = formatPeso(d.total);
+      document.getElementById("t-efectivo").textContent   = formatPeso(d.efectivo);
+      document.getElementById("t-vuelto").textContent     = formatPeso(d.vuelto);
+      document.getElementById("t-cae").textContent        = d.cae;
+      document.getElementById("t-caevto").textContent     = formatFechaCAE(d.cae_vto);
+      document.getElementById("t-footer-extra").textContent = d.footer_extra;
+
+      // Productos
+      const tbody = document.getElementById("t-items");
+      if (d.items.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#aaa">Sin productos</td></tr>`;
+      } else {
+        tbody.innerHTML = d.items.map(item => `
+          <tr>
+            <td class="item-nombre">${escapeHtml(item.nombre || "")}</td>
+            <td class="item-cant">${item.cantidad}</td>
+            <td class="item-precio">${formatPeso(item.precio_unit)}</td>
+            <td class="item-subtotal">${formatPeso(item.subtotal)}</td>
+          </tr>
+        `).join("");
+      }
+
+      // Título de la pestaña
+      document.title = `Ticket #${d.venta_id} — ${d.negocio}`;
+    }
+
+    renderTicket();
+
+    // Auto-imprimir si viene el parámetro ?autoprint=1
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("autoprint") === "1") {
+      window.addEventListener("load", () => setTimeout(() => window.print(), 400));
+    }
+  </script>
+
+</body>
+</html>

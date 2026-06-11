@@ -1,5 +1,5 @@
 // server.js — KOSKIO APP SaaS v2.1.0
-
+//
 const express  = require("express");
 const cors     = require("cors");
 const path     = require("path");
@@ -14,7 +14,7 @@ const app  = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static(path.join(__dirname, "..", "frontend")));
+app.use(express.static(path.join(__dirname, "public")));
 
 // ── Rutas públicas ────────────────────────────────────────────────────────────
 app.use("/api/auth",       require("./routes/auth"));
@@ -27,7 +27,7 @@ app.use("/api/caja",      verificarToken, resolverTenant, require("./routes/caja
 app.use("/api/config",    verificarToken, resolverTenant, require("./routes/config"));
 
 app.get("/", (req, res) =>
-  res.sendFile(path.join(__dirname, "..", "frontend", "index.html"))
+  res.sendFile(path.join(__dirname, "public", "index.html"))
 );
 
 app.use((err, req, res, next) => {
